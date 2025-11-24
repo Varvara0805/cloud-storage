@@ -17,6 +17,18 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 
+# Проверяем доступность базы данных
+def check_db():
+    try:
+        conn = sqlite3.connect('cloud_storage.db')
+        c = conn.cursor()
+        c.execute("SELECT 1")
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"❌ Database error: {e}")
+        return False
+
 # Генерация ключа шифрования
 def generate_encryption_key():
     key_file = 'encryption.key'
@@ -463,4 +475,5 @@ if __name__ == '__main__':
     print("✅ Database ready!")
     print("🌐 Server: http://localhost:5000")
     print("👉 Register once, login multiple times!")
+
     app.run(debug=True, host='0.0.0.0', port=5000)
