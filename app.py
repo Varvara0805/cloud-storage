@@ -341,4 +341,3 @@ if __name__ == '__main__':
 
 
 
-Этот код 100% заработает! Замени app.py и обнови requirements.txt
