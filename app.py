@@ -5,114 +5,102 @@ from cryptography.fernet import Fernet
 import os
 import hashlib
 from datetime import datetime
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import sqlite3
 import io
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
+app.secret_key = 'super-secret-key-12345'
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # Создаем папку для загрузок
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Получение строки подключения к PostgreSQL из переменных окружения Render
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-# Генерация ключа шифрования (на Render используем фиксированный ключ из переменных окружения)
+# Генерация ключа шифрования
 def get_encryption_key():
-    key = os.environ.get('ENCRYPTION_KEY')
-    if key:
-        return key.encode()
-    else:
-        # Генерируем новый ключ если нет в переменных окружения
-        new_key = Fernet.generate_key()
-        print("⚠️  ВНИМАНИЕ: Используется временный ключ шифрования. Для production установите ENCRYPTION_KEY в переменных окружения Render")
-        return new_key
+    return Fernet.generate_key()
 
 ENCRYPTION_KEY = get_encryption_key()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-def get_db_connection():
-    """Установка соединения с PostgreSQL"""
-    conn = psycopg2.connect(DATABASE_URL)
-    return conn
+# Глобальная переменная для хранения соединения с БД
+_db_connection = None
 
-def init_db():
-    """Инициализация таблиц в PostgreSQL"""
+def get_db_connection():
+    """Получение соединения с БД с обязательной инициализацией"""
+    global _db_connection
+    
+    if _db_connection is None:
+        # Создаем новое соединение и инициализируем БД
+        _db_connection = sqlite3.connect(':memory:')  # Используем память вместо файла
+        _db_connection.row_factory = sqlite3.Row
+        
+        # Инициализируем таблицы
+        init_db(_db_connection)
+    
+    return _db_connection
+
+def init_db(conn):
+    """Инициализация таблиц в переданном соединении"""
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        c = conn.cursor()
         
-        # Создаем таблицу пользователей
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+        c.execute('''CREATE TABLE IF NOT EXISTS users
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      username TEXT UNIQUE NOT NULL,
+                      password TEXT NOT NULL,
+                      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
         
-        # Создаем таблицу файлов
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS files (
-                id SERIAL PRIMARY KEY,
-                filename VARCHAR(255) NOT NULL,
-                original_filename VARCHAR(255) NOT NULL,
-                user_id INTEGER NOT NULL,
-                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                file_size INTEGER,
-                file_hash TEXT
-            )
-        ''')
+        c.execute('''CREATE TABLE IF NOT EXISTS files
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                      filename TEXT NOT NULL,
+                      original_filename TEXT NOT NULL,
+                      user_id INTEGER NOT NULL,
+                      uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                      file_size INTEGER,
+                      file_hash TEXT)''')
+        
+        # Добавляем тестового пользователя если таблица пустая
+        c.execute('SELECT COUNT(*) as count FROM users')
+        if c.fetchone()['count'] == 0:
+            hashed_password = generate_password_hash('admin123')
+            c.execute('INSERT INTO users (username, password) VALUES (?, ?)',
+                     ('admin', hashed_password))
+            print("✅ Test user created: admin / admin123")
         
         conn.commit()
-        cur.close()
-        conn.close()
-        print("✅ PostgreSQL database initialized successfully!")
+        print("✅ Database initialized successfully!")
         return True
     except Exception as e:
         print(f"❌ Database error: {e}")
         return False
 
 def encrypt_file(file_data):
-    """Шифрует данные файла"""
     return cipher_suite.encrypt(file_data)
 
 def decrypt_file(encrypted_data):
-    """Расшифровывает данные файла"""
     return cipher_suite.decrypt(encrypted_data)
 
 def calculate_file_hash(file_data):
-    """Вычисляет хеш файла для проверки целостности"""
     return hashlib.sha256(file_data).hexdigest()
 
-# Простая система flash сообщений
-class FlashMessages:
-    def __init__(self):
-        self.messages = []
-    
-    def add(self, message, category='info'):
-        self.messages.append((category, message))
-    
-    def get_all(self):
-        messages = self.messages.copy()
-        self.messages.clear()
-        return messages
+# Простая система сообщений
+messages = []
 
-flash_messages = FlashMessages()
+def add_flash_message(message, category='info'):
+    messages.append((category, message))
 
 def get_flash_html():
+    global messages
     messages_html = ''
-    for category, message in flash_messages.get_all():
+    for category, message in messages:
         if category == 'error':
             messages_html += f'<div style="background: #ffebee; color: #c62828; padding: 10px; border-radius: 5px; margin-bottom: 20px;">{message}</div>'
         elif category == 'success':
             messages_html += f'<div style="background: #e8f5e8; color: #2e7d32; padding: 10px; border-radius: 5px; margin-bottom: 20px;">{message}</div>'
         else:
             messages_html += f'<div style="background: #e3f2fd; color: #1565c0; padding: 10px; border-radius: 5px; margin-bottom: 20px;">{message}</div>'
+    messages = []
     return messages_html
 
 @app.route('/')
@@ -128,19 +116,15 @@ def login():
         password = request.form['password']
         
         conn = get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute('SELECT * FROM users WHERE username = %s', (username,))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
+        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
         
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
             session['username'] = user['username']
-            flash_messages.add('Login successful!', 'success')
+            add_flash_message('Login successful!', 'success')
             return redirect('/dashboard')
         else:
-            flash_messages.add('Invalid username or password', 'error')
+            add_flash_message('Invalid username or password', 'error')
     
     return f'''
     <!DOCTYPE html>
@@ -154,19 +138,15 @@ def login():
             .form-group {{ margin-bottom: 20px; }}
             input[type="text"], input[type="password"] {{ width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }}
             .btn {{ width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }}
-            .btn:hover {{ background: #0056b3; }}
-            .security-info {{ background: #e3f2fd; color: #1565c0; padding: 10px; border-radius: 5px; margin-bottom: 20px; }}
         </style>
     </head>
     <body>
         <div class="container">
             <h2>🔐 Secure Cloud Storage</h2>
-            <div class="security-info">
-                <strong>🔒 Secure Features:</strong><br>
-                • AES-256 Encryption<br>
-                • Password Hashing<br>
-                • SHA-256 Integrity<br>
-                • PostgreSQL Database
+            <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+                <strong>Test account:</strong><br>
+                Username: <code>admin</code><br>
+                Password: <code>admin123</code>
             </div>
             {get_flash_html()}
             <form method="POST">
@@ -193,25 +173,21 @@ def register():
         password = request.form['password']
         
         if len(password) < 6:
-            flash_messages.add('Password must be at least 6 characters', 'error')
+            add_flash_message('Password must be at least 6 characters', 'error')
             return redirect('/register')
         
         hashed_password = generate_password_hash(password)
         
         conn = get_db_connection()
-        cur = conn.cursor()
         try:
-            cur.execute('INSERT INTO users (username, password) VALUES (%s, %s)',
-                       (username, hashed_password))
+            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)',
+                        (username, hashed_password))
             conn.commit()
-            flash_messages.add('Registration successful! Please login.', 'success')
+            add_flash_message('Registration successful! Please login.', 'success')
             return redirect('/login')
-        except psycopg2.IntegrityError:
-            flash_messages.add('Username already exists', 'error')
+        except sqlite3.IntegrityError:
+            add_flash_message('Username already exists', 'error')
             return redirect('/register')
-        finally:
-            cur.close()
-            conn.close()
     
     return f'''
     <!DOCTYPE html>
@@ -254,15 +230,11 @@ def dashboard():
         return redirect('/login')
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM files WHERE user_id = %s ORDER BY uploaded_at DESC', 
-                (session['user_id'],))
-    files = cur.fetchall()
-    cur.close()
-    conn.close()
+    files_list = conn.execute('SELECT * FROM files WHERE user_id = ? ORDER BY uploaded_at DESC', 
+                        (session['user_id'],)).fetchall()
     
     files_html = ""
-    for file in files:
+    for file in files_list:
         size_kb = round(file['file_size'] / 1024, 2) if file['file_size'] else 0
         
         files_html += f'''
@@ -270,7 +242,7 @@ def dashboard():
             <div>
                 <strong>🔒 {file['original_filename']}</strong>
                 <br>
-                <small>📏 {size_kb} KB | 📅 {file['uploaded_at'].strftime("%Y-%m-%d %H:%M")}</small>
+                <small>📏 {size_kb} KB</small>
             </div>
             <div>
                 <a href="/download/{file['id']}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none;">⬇️ Download</a>
@@ -315,7 +287,7 @@ def dashboard():
             </div>
             
             <div class="files-box">
-                <h3 style="margin-top: 0;">📁 Your Encrypted Files ({len(files)})</h3>
+                <h3 style="margin-top: 0;">📁 Your Encrypted Files ({len(files_list)})</h3>
                 <div style="border: 1px solid #eee; border-radius: 5px;">
                     {files_html}
                 </div>
@@ -331,13 +303,13 @@ def upload_file():
         return redirect('/login')
     
     if 'file' not in request.files:
-        flash_messages.add('No file selected', 'error')
+        add_flash_message('No file selected', 'error')
         return redirect('/dashboard')
     
     file = request.files['file']
     
     if file.filename == '':
-        flash_messages.add('No file selected', 'error')
+        add_flash_message('No file selected', 'error')
         return redirect('/dashboard')
     
     if file:
@@ -355,14 +327,11 @@ def upload_file():
             f.write(encrypted_data)
         
         conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute('INSERT INTO files (filename, original_filename, user_id, file_size, file_hash) VALUES (%s, %s, %s, %s, %s)',
-                   (unique_filename, filename, session['user_id'], file_size, file_hash))
+        conn.execute('INSERT INTO files (filename, original_filename, user_id, file_size, file_hash) VALUES (?, ?, ?, ?, ?)',
+                    (unique_filename, filename, session['user_id'], file_size, file_hash))
         conn.commit()
-        cur.close()
-        conn.close()
         
-        flash_messages.add(f'File "{filename}" encrypted and uploaded successfully!', 'success')
+        add_flash_message(f'File "{filename}" encrypted and uploaded successfully!', 'success')
     
     return redirect('/dashboard')
 
@@ -372,12 +341,8 @@ def download_file(file_id):
         return redirect('/login')
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM files WHERE id = %s AND user_id = %s', 
-               (file_id, session['user_id']))
-    file = cur.fetchone()
-    cur.close()
-    conn.close()
+    file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', 
+                       (file_id, session['user_id'])).fetchone()
     
     if file:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file['filename'])
@@ -387,23 +352,15 @@ def download_file(file_id):
             
             try:
                 decrypted_data = decrypt_file(encrypted_data)
-                
-                current_hash = calculate_file_hash(decrypted_data)
-                if current_hash != file['file_hash']:
-                    flash_messages.add('⚠️ File integrity check failed!', 'error')
-                
-                # Отправляем файл напрямую из памяти без создания временного файла
                 return send_file(
                     io.BytesIO(decrypted_data),
                     as_attachment=True,
                     download_name=file['original_filename']
                 )
-                
             except Exception as e:
-                flash_messages.add('Error decrypting file', 'error')
-                print(f"❌ Decryption error: {e}")
+                add_flash_message('Error decrypting file', 'error')
     
-    flash_messages.add('File not found', 'error')
+    add_flash_message('File not found', 'error')
     return redirect('/dashboard')
 
 @app.route('/delete/<int:file_id>')
@@ -412,37 +369,30 @@ def delete_file(file_id):
         return redirect('/login')
     
     conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute('SELECT * FROM files WHERE id = %s AND user_id = %s', 
-               (file_id, session['user_id']))
-    file = cur.fetchone()
+    file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', 
+                       (file_id, session['user_id'])).fetchone()
     
     if file:
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], file['filename'])
         if os.path.exists(file_path):
             os.remove(file_path)
-        cur.execute('DELETE FROM files WHERE id = %s', (file_id,))
+        conn.execute('DELETE FROM files WHERE id = ?', (file_id,))
         conn.commit()
-        flash_messages.add('File deleted successfully!', 'success')
+        add_flash_message('File deleted successfully!', 'success')
     else:
-        flash_messages.add('File not found', 'error')
+        add_flash_message('File not found', 'error')
     
-    cur.close()
-    conn.close()
     return redirect('/dashboard')
 
 @app.route('/logout')
 def logout():
     session.clear()
-    flash_messages.add('You have been logged out', 'info')
+    add_flash_message('You have been logged out', 'info')
     return redirect('/login')
 
 if __name__ == '__main__':
-    print("🚀 Starting Secure Cloud Storage with PostgreSQL...")
-    print("🔐 Encryption: AES-256")
-    print("🗄️  Database: PostgreSQL")
-    print("📊 Integrity: SHA-256")
-    init_db()
+    print("🚀 Starting Secure Cloud Storage...")
+    # Инициализируем БД при запуске
+    get_db_connection()
     print("✅ Database ready!")
-    print("🌐 Server starting...")
     app.run(host='0.0.0.0', port=5000)
