@@ -17,6 +17,21 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
+# 🔧 ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ ДЛЯ ФАЙЛОВ (сохраняется до перезапуска)
+user_files_storage = {}
+
+
+
+def get_user_files(user_id):
+    """Получаем файлы пользователя из памяти"""
+    if user_id in user_files_storage:
+        files = user_files_storage[user_id]
+        print(f"📁 Returning {len(files)} files for user {user_id}")
+        return sorted(files, key=lambda x: x.get('uploaded_at', ''), reverse=True)
+    else:
+        print(f"📁 No files found for user {user_id}")
+        return []
+
 # 🔧 НАСТРОЙКИ CLOUDINARY
 cloudinary.config(
     cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
@@ -583,6 +598,7 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
