@@ -67,7 +67,7 @@ def delete_session(session_id):
             pass
 
 # 🔧 БАЗА ДАННЫХ В CLOUDINARY (остается без изменений)
-admin123
+
 
 def save_user(username, password_hash):
     """Сохраняем пользователя в Cloudinary"""
@@ -500,4 +500,5 @@ if __name__ == '__main__':
     print("✅ Persistent sessions enabled!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
