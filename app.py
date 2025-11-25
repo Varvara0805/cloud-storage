@@ -359,8 +359,18 @@ def dashboard():
     if 'user_id' not in session:
         return redirect('/login')
     
-    files_list = get_user_files(session['user_id'])
+    user_id = session['user_id']
+    print(f"🎯 Dashboard loaded for user: {user_id}")
     
+    # Получаем файлы
+    files_list = get_user_files(user_id)
+    print(f"📁 Files returned: {len(files_list)}")
+    
+    # Отладочная информация
+    for i, file in enumerate(files_list):
+        print(f"📄 File {i}: {file.get('original_filename', 'unknown')}")
+    
+    # Генерируем HTML для файлов
     files_html = ""
     for file in files_list:
         size_kb = round(file['file_size'] / 1024, 2) if file['file_size'] else 0
@@ -381,6 +391,9 @@ def dashboard():
     
     if not files_html:
         files_html = '<p style="text-align: center; color: #666; padding: 40px;">No files uploaded yet.</p>'
+        print("📭 No files HTML generated")
+    
+    print("✅ Dashboard HTML generated successfully")
     
     return f'''
     <!DOCTYPE html>
@@ -598,6 +611,7 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
