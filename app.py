@@ -18,18 +18,62 @@ app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # 🔧 ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ ДЛЯ ФАЙЛОВ (сохраняется до перезапуска)
+
+
+
+
+# 🔧 ГЛОБАЛЬНОЕ ХРАНИЛИЩЕ (добавьте в начало после импортов)
 user_files_storage = {}
 
-
+def save_file(file_data):
+    """Сохраняем метаданные файла в памяти"""
+    try:
+        user_id = file_data['user_id']
+        file_id = file_data['file_id']
+        
+        print(f"💾 Saving file: {file_data['original_filename']} for user {user_id}")
+        
+        # Инициализируем список файлов для пользователя если нужно
+        if user_id not in user_files_storage:
+            user_files_storage[user_id] = []
+            print(f"📁 Created storage for user {user_id}")
+        
+        # Удаляем старую версию файла если есть
+        user_files_storage[user_id] = [f for f in user_files_storage[user_id] if f['file_id'] != file_id]
+        
+        # Добавляем новый файл
+        user_files_storage[user_id].append(file_data)
+        
+        print(f"✅ File saved! User {user_id} now has {len(user_files_storage[user_id])} files")
+        
+        # Выводим все файлы пользователя для отладки
+        for i, f in enumerate(user_files_storage[user_id]):
+            print(f"   {i+1}. {f['original_filename']} (ID: {f['file_id']})")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error saving file: {e}")
+        return False
 
 def get_user_files(user_id):
     """Получаем файлы пользователя из памяти"""
-    if user_id in user_files_storage:
-        files = user_files_storage[user_id]
-        print(f"📁 Returning {len(files)} files for user {user_id}")
-        return sorted(files, key=lambda x: x.get('uploaded_at', ''), reverse=True)
-    else:
-        print(f"📁 No files found for user {user_id}")
+    try:
+        print(f"📂 Getting files for user: {user_id}")
+        print(f"📦 Storage keys: {list(user_files_storage.keys())}")
+        
+        if user_id in user_files_storage:
+            files = user_files_storage[user_id]
+            print(f"🎉 Found {len(files)} files for user {user_id}:")
+            for i, file in enumerate(files):
+                print(f"   {i+1}. {file.get('original_filename', 'unknown')}")
+            return sorted(files, key=lambda x: x.get('uploaded_at', ''), reverse=True)
+        else:
+            print(f"📭 No files found for user {user_id}")
+            return []
+            
+    except Exception as e:
+        print(f"❌ Error in get_user_files: {e}")
         return []
 
 # 🔧 НАСТРОЙКИ CLOUDINARY
@@ -138,34 +182,7 @@ def get_user_files(user_id):
         print(f"❌ Error loading files: {e}")
         return []
 
-def save_file(file_data):
-   
-    try:
-        file_id = file_data['file_id']
-        user_id = file_data['user_id']
-        
-        print(f"🔧 Saving metadata for file: {file_id}")
-        
-        # Преобразуем данные в JSON строку
-        json_str = json.dumps(file_data, ensure_ascii=False)
-        
-        # Сохраняем как raw файл в Cloudinary
-        result = cloudinary.uploader.upload(
-            json_str.encode('utf-8'),
-            public_id=f"database/files/{user_id}/{file_id}",
-            resource_type="raw"
-        )
-        
-        if result:
-            print(f"✅ Metadata saved: {file_id}")
-            return True
-        else:
-            print(f"❌ Metadata save failed: {file_id}")
-            return False
-            
-    except Exception as e:
-        print(f"❌ Error saving metadata: {e}")
-        return False
+
 
 def delete_file_data(user_id, file_id):
     """Удаляем метаданные файла из Cloudinary"""
@@ -611,6 +628,7 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
