@@ -10,6 +10,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import requests
+import json
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
@@ -27,11 +28,50 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 ПРОСТАЯ БАЗА В ПАМЯТИ
-users = {'admin': {'password': generate_password_hash('admin123'), 'username': 'admin'}}
-files_storage = {}
+# 🔧 ВСЕ ДАННЫЕ ХРАНЯТСЯ В CLOUDINARY
+def get_users():
+    """Получаем пользователей из Cloudinary"""
+    try:
+        result = cloudinary.api.resources(type='upload', prefix='db/users/', max_results=100)
+        users = {}
+        for resource in result.get('resources', []):
+            url = cloudinary.utils.cloudinary_url(resource['public_id'], resource_type='raw')[0]
+            response = requests.get(url)
+            if response.status_code == 200:
+                user_data = response.json()
+                users[user_data['username']] = user_data
+        return users
+    except:
+        return {}
 
-# 🔧 ФУНКЦИИ
+def save_user(username, password_hash):
+    """Сохраняем пользователя в Cloudinary"""
+    user_data = {'username': username, 'password': password_hash, 'created_at': datetime.now().isoformat()}
+    json_str = json.dumps(user_data).encode('utf-8')
+    cloudinary.uploader.upload(json_str, public_id=f"db/users/{username}", resource_type="raw")
+    return True
+
+def get_user_files(user_id):
+    """Получаем файлы пользователя из Cloudinary"""
+    try:
+        result = cloudinary.api.resources(type='upload', prefix=f'db/files/{user_id}/', max_results=100)
+        files = []
+        for resource in result.get('resources', []):
+            url = cloudinary.utils.cloudinary_url(resource['public_id'], resource_type='raw')[0]
+            response = requests.get(url)
+            if response.status_code == 200:
+                files.append(response.json())
+        return sorted(files, key=lambda x: x.get('uploaded_at', ''), reverse=True)
+    except:
+        return []
+
+def save_user_files(user_id, files):
+    """Сохраняем список файлов пользователя в Cloudinary"""
+    json_str = json.dumps(files).encode('utf-8')
+    cloudinary.uploader.upload(json_str, public_id=f"db/files/{user_id}", resource_type="raw")
+    return True
+
+# 🔧 ФУНКЦИИ ШИФРОВАНИЯ
 def encrypt_file(file_data):
     return cipher_suite.encrypt(file_data)
 
@@ -63,6 +103,14 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        users = get_users()
+        
+        # Автоматически создаем admin если нет пользователей
+        if not users:
+            admin_hash = generate_password_hash('admin123')
+            save_user('admin', admin_hash)
+            users = {'admin': {'username': 'admin', 'password': admin_hash}}
+        
         user = users.get(username)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = username
@@ -70,14 +118,15 @@ def login():
             add_flash_message('Login successful!', 'success')
             return redirect('/dashboard')
         add_flash_message('Invalid credentials', 'error')
-    return f'''
+    
+    return '''
     <html><body style="margin: 50px; font-family: Arial;">
         <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
             <h2>🔐 Login</h2>
             <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
                 <strong>Test:</strong> admin / admin123
             </div>
-            {get_flash_html()}
+            ''' + get_flash_html() + '''
             <form method="POST">
                 <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
                 <input type="password" name="password" placeholder="Password" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
@@ -96,18 +145,23 @@ def register():
         if len(password) < 6:
             add_flash_message('Password too short', 'error')
             return redirect('/register')
+        
+        users = get_users()
         if username in users:
             add_flash_message('User exists', 'error')
             return redirect('/register')
-        users[username] = {'password': generate_password_hash(password), 'username': username}
-        files_storage[username] = []
+        
+        save_user(username, generate_password_hash(password))
+        save_user_files(username, [])  # Создаем пустой список файлов
+        
         add_flash_message('Registration successful!', 'success')
         return redirect('/login')
-    return f'''
+    
+    return '''
     <html><body style="margin: 50px; font-family: Arial;">
         <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
             <h2>📝 Register</h2>
-            {get_flash_html()}
+            ''' + get_flash_html() + '''
             <form method="POST">
                 <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
                 <input type="password" name="password" placeholder="Password (6+ chars)" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
@@ -124,7 +178,7 @@ def dashboard():
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = files_storage.get(user_id, [])
+    user_files = get_user_files(user_id)
     
     files_html = ""
     for file in user_files:
@@ -168,54 +222,6 @@ def dashboard():
     </body></html>
     '''
 
-@app.route('/recover_files')
-def recover_files():
-    """Восстанавливает файлы из Cloudinary после перезапуска"""
-    if 'user_id' not in session:
-        return redirect('/login')
-    
-    user_id = session['user_id']
-    
-    try:
-        # Ищем все файлы пользователя в Cloudinary
-        result = cloudinary.api.resources(
-            type='upload',
-            prefix=f"files/{user_id}/",
-            max_results=100
-        )
-        
-        recovered = 0
-        for resource in result.get('resources', []):
-            # Извлекаем информацию из public_id
-            public_id = resource['public_id']
-            parts = public_id.split('/')
-            if len(parts) >= 3:
-                filename = parts[2].split('_', 1)[1] if '_' in parts[2] else parts[2]
-                file_id = parts[2].split('_')[0] if '_' in parts[2] else parts[2]
-                
-                # Добавляем в список файлов
-                if user_id not in files_storage:
-                    files_storage[user_id] = []
-                
-                # Проверяем нет ли уже такого файла
-                if not any(f['id'] == file_id for f in files_storage[user_id]):
-                    files_storage[user_id].append({
-                        'id': file_id,
-                        'name': filename,
-                        'size': round(resource['bytes'] / 1024, 1),
-                        'url': resource['secure_url'],
-                        'public_id': public_id,
-                        'uploaded_at': resource['created_at']
-                    })
-                    recovered += 1
-        
-        add_flash_message(f'Recovered {recovered} files from cloud!', 'success')
-        
-    except Exception as e:
-        add_flash_message(f'Recovery error: {str(e)}', 'error')
-    
-    return redirect('/dashboard')
-    
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'user_id' not in session:
@@ -242,15 +248,13 @@ def upload_file():
         encrypted_data = encrypt_file(file_data)
         result = cloudinary.uploader.upload(
             encrypted_data,
-            public_id=f"files/{user_id}/{file_id}_{filename}",
+            public_id=f"storage/{user_id}/{file_id}_{filename}",
             resource_type="raw"
         )
         
-        # Сохраняем метаданные
-        if user_id not in files_storage:
-            files_storage[user_id] = []
-        
-        files_storage[user_id].append({
+        # Получаем текущие файлы и добавляем новый
+        user_files = get_user_files(user_id)
+        user_files.append({
             'id': file_id,
             'name': filename,
             'size': round(file_size / 1024, 1),
@@ -258,6 +262,9 @@ def upload_file():
             'public_id': result['public_id'],
             'uploaded_at': datetime.now().isoformat()
         })
+        
+        # Сохраняем обновленный список
+        save_user_files(user_id, user_files)
         
         add_flash_message(f'File "{filename}" uploaded successfully!', 'success')
         
@@ -272,7 +279,7 @@ def download_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = files_storage.get(user_id, [])
+    user_files = get_user_files(user_id)
     
     file_data = next((f for f in user_files if f['id'] == file_id), None)
     if file_data:
@@ -293,10 +300,13 @@ def delete_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    if user_id in files_storage:
-        files_storage[user_id] = [f for f in files_storage[user_id] if f['id'] != file_id]
-        add_flash_message('File deleted', 'success')
+    user_files = get_user_files(user_id)
     
+    # Удаляем файл из списка
+    user_files = [f for f in user_files if f['id'] != file_id]
+    save_user_files(user_id, user_files)
+    
+    add_flash_message('File deleted', 'success')
     return redirect('/dashboard')
 
 @app.route('/logout')
