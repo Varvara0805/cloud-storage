@@ -28,11 +28,50 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 ПРОСТОЕ ХРАНИЛИЩЕ В ПАМЯТИ (для теста)
-users = {'admin': {'password': generate_password_hash('admin123'), 'username': 'admin'}}
-files_db = {}
+# 🔧 ВСЕ ДАННЫЕ ХРАНЯТСЯ В CLOUDINARY
+def save_to_cloudinary(data, path):
+    """Сохраняет данные в Cloudinary"""
+    try:
+        json_str = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        result = cloudinary.uploader.upload(
+            json_str,
+            public_id=path,
+            resource_type="raw"
+        )
+        return True
+    except Exception as e:
+        print(f"❌ Save error: {e}")
+        return False
 
-# 🔧 ФУНКЦИИ
+def load_from_cloudinary(path):
+    """Загружает данные из Cloudinary"""
+    try:
+        url = cloudinary.utils.cloudinary_url(path, resource_type='raw')[0]
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+    except:
+        pass
+    return None
+
+# 🔧 БАЗА ДАННЫХ
+def get_users():
+    users = load_from_cloudinary('db/users') or {}
+    if not users:  # Создаем admin если нет пользователей
+        users = {'admin': {'username': 'admin', 'password': generate_password_hash('admin123')}}
+        save_to_cloudinary(users, 'db/users')
+    return users
+
+def save_users(users):
+    return save_to_cloudinary(users, 'db/users')
+
+def get_user_files(user_id):
+    return load_from_cloudinary(f'db/files_{user_id}') or []
+
+def save_user_files(user_id, files):
+    return save_to_cloudinary(files, f'db/files_{user_id}')
+
+# 🔧 ФУНКЦИИ ШИФРОВАНИЯ
 def encrypt_file(file_data):
     return cipher_suite.encrypt(file_data)
 
@@ -64,6 +103,8 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        users = get_users()
+        
         user = users.get(username)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = username
@@ -98,11 +139,16 @@ def register():
         if len(password) < 6:
             add_flash_message('Password too short', 'error')
             return redirect('/register')
+        
+        users = get_users()
         if username in users:
             add_flash_message('User exists', 'error')
             return redirect('/register')
-        users[username] = {'password': generate_password_hash(password), 'username': username}
-        files_db[username] = []
+        
+        users[username] = {'username': username, 'password': generate_password_hash(password)}
+        save_users(users)
+        save_user_files(username, [])
+        
         add_flash_message('Registration successful!', 'success')
         return redirect('/login')
     
@@ -127,7 +173,7 @@ def dashboard():
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = files_db.get(user_id, [])
+    user_files = get_user_files(user_id)
     
     files_html = ""
     for file in user_files:
@@ -202,10 +248,8 @@ def upload_file():
         )
         
         # Сохраняем в базу
-        if user_id not in files_db:
-            files_db[user_id] = []
-        
-        files_db[user_id].append({
+        user_files = get_user_files(user_id)
+        user_files.append({
             'id': file_id,
             'name': filename,
             'size': round(file_size / 1024, 1),
@@ -214,6 +258,7 @@ def upload_file():
             'date': datetime.now().strftime("%Y-%m-%d %H:%M")
         })
         
+        save_user_files(user_id, user_files)
         add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
         
     except Exception as e:
@@ -227,7 +272,7 @@ def download_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = files_db.get(user_id, [])
+    user_files = get_user_files(user_id)
     
     file_data = next((f for f in user_files if f['id'] == file_id), None)
     if file_data:
@@ -248,10 +293,13 @@ def delete_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    if user_id in files_db:
-        files_db[user_id] = [f for f in files_db[user_id] if f['id'] != file_id]
-        add_flash_message('File deleted', 'success')
+    user_files = get_user_files(user_id)
     
+    # Удаляем файл из списка
+    user_files = [f for f in user_files if f['id'] != file_id]
+    save_user_files(user_id, user_files)
+    
+    add_flash_message('File deleted', 'success')
     return redirect('/dashboard')
 
 @app.route('/logout')
