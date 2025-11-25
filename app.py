@@ -38,36 +38,49 @@ cipher_suite = Fernet(ENCRYPTION_KEY)
 
 # 🔧 БАЗА ДАННЫХ В CLOUDINARY
 def get_users():
-    """Получаем всех пользователей из Cloudinary"""
+
+    users = {}
+    
     try:
+        # Пробуем загрузить пользователей из Cloudinary
         result = cloudinary.api.resources(
             type='upload',
             prefix='database/users/',
             max_results=100
         )
-        users = {}
+        
         for resource in result.get('resources', []):
-            user_data = download_json(resource['public_id'])
-            if user_data:
-                users[user_data['username']] = user_data
-        
-        # ✅ СОЗДАЕМ ADMIN ЕСЛИ НЕТ ПОЛЬЗОВАТЕЛЕЙ
-        if not users:
-            print("🔧 Creating default admin user...")
-            admin_data = {
-                'username': 'admin',
-                'password': generate_password_hash('admin123'),
-                'created_at': datetime.now().isoformat()
-            }
-            if upload_json(admin_data, 'database/users/admin'):
-                users['admin'] = admin_data
-                print("✅ Default admin created: admin / admin123")
-        
-        return users
+            try:
+                user_data = download_json(resource['public_id'])
+                if user_data and 'username' in user_data:
+                    users[user_data['username']] = user_data
+                    print(f"✅ Loaded user: {user_data['username']}")
+            except Exception as e:
+                print(f"⚠️ Error loading user from {resource['public_id']}: {e}")
+                
     except Exception as e:
-        print(f"❌ Error loading users: {e}")
-        # Возвращаем хотя бы admin при ошибке
-        return {'admin': {'username': 'admin', 'password': generate_password_hash('admin123')}}
+        print(f"⚠️ Cloudinary error: {e}")
+    
+    # ✅ ГАРАНТИРУЕМ что admin всегда есть
+    if 'admin' not in users:
+        print("🔧 Creating admin user...")
+        admin_data = {
+            'username': 'admin',
+            'password': generate_password_hash('admin123'),
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Пробуем сохранить в Cloudinary
+        cloud_result = upload_json(admin_data, 'database/users/admin')
+        if cloud_result:
+            print("✅ Admin saved to Cloudinary")
+        else:
+            print("⚠️ Admin saved to memory only")
+        
+        users['admin'] = admin_data
+    
+    print(f"🎯 Available users: {list(users.keys())}")
+    return users
 
 def save_user(username, password_hash):
    
@@ -497,4 +510,5 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
