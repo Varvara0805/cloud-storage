@@ -392,58 +392,76 @@ def upload_file():
     if 'user_id' not in session:
         return redirect('/login')
     
+    print("🔧 Upload attempt detected")
+    
     if 'file' not in request.files:
         add_flash_message('No file selected', 'error')
+        print("❌ No file in request")
         return redirect('/dashboard')
     
     file = request.files['file']
     
     if file.filename == '':
         add_flash_message('No file selected', 'error')
+        print("❌ Empty filename")
         return redirect('/dashboard')
     
-    if file:
+    try:
+        print(f"🔧 Processing file: {file.filename}")
         filename = secure_filename(file.filename)
         unique_filename = datetime.now().strftime("%Y%m%d_%H%M%S_") + filename
         file_id = hashlib.md5(unique_filename.encode()).hexdigest()
         
+        # Читаем файл
         file_data = file.read()
         file_size = len(file_data)
+        print(f"🔧 File size: {file_size} bytes")
         
-        file_hash = calculate_file_hash(file_data)
+        if file_size == 0:
+            add_flash_message('File is empty', 'error')
+            return redirect('/dashboard')
+        
+        # Шифруем
         encrypted_data = encrypt_file(file_data)
+        print("🔧 File encrypted")
         
-        # Загружаем ФАЙЛ в Cloudinary
+        # Загружаем в Cloudinary - УПРОЩЕННАЯ ВЕРСИЯ
         try:
+            print("🔧 Uploading to Cloudinary...")
             cloud_result = cloudinary.uploader.upload(
                 encrypted_data,
                 public_id=f"storage/files/{session['user_id']}/{unique_filename}",
                 resource_type="raw"
             )
+            print("✅ File uploaded to Cloudinary")
         except Exception as e:
-            print(f"❌ File upload error: {e}")
-            cloud_result = None
+            print(f"❌ Cloudinary upload error: {e}")
+            add_flash_message('Error uploading to cloud storage', 'error')
+            return redirect('/dashboard')
         
-        if cloud_result:
-            # Сохраняем МЕТАДАННЫЕ в Cloudinary
-            file_metadata = {
-                'file_id': file_id,
-                'filename': unique_filename,
-                'original_filename': filename,
-                'user_id': session['user_id'],
-                'uploaded_at': datetime.now().isoformat(),
-                'file_size': file_size,
-                'file_hash': file_hash,
-                'cloudinary_url': cloud_result['secure_url'],
-                'cloudinary_public_id': cloud_result['public_id']
-            }
-            
-            if save_file(file_metadata):
-                add_flash_message(f'File "{filename}" encrypted and uploaded to cloud!', 'success')
-            else:
-                add_flash_message('Error saving file metadata', 'error')
+        # Сохраняем метаданные
+        file_metadata = {
+            'file_id': file_id,
+            'filename': unique_filename,
+            'original_filename': filename,
+            'user_id': session['user_id'],
+            'uploaded_at': datetime.now().isoformat(),
+            'file_size': file_size,
+            'cloudinary_url': cloud_result['secure_url'],
+            'cloudinary_public_id': cloud_result['public_id']
+        }
+        
+        # Пробуем сохранить метаданные
+        if save_file(file_metadata):
+            add_flash_message(f'File "{filename}" uploaded successfully!', 'success')
+            print("✅ File metadata saved")
         else:
-            add_flash_message('Error uploading file to cloud storage', 'error')
+            add_flash_message('File uploaded but metadata not saved', 'warning')
+            print("⚠️ File metadata not saved")
+        
+    except Exception as e:
+        print(f"❌ Upload error: {e}")
+        add_flash_message('Error processing file', 'error')
     
     return redirect('/dashboard')
 
@@ -510,5 +528,6 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
