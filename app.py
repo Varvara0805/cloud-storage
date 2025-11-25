@@ -487,6 +487,38 @@ def upload_file():
         add_flash_message('Error processing file', 'error')
     
     return redirect('/dashboard')
+@app.route('/debug_files')
+def debug_files():
+    """Страница для отладки - показывает все файлы в Cloudinary"""
+    if 'user_id' not in session:
+        return redirect('/login')
+    
+    user_id = session['user_id']
+    
+    # Показываем все файлы пользователя
+    try:
+        result = cloudinary.api.resources(
+            type='upload',
+            prefix=f"database/files/{user_id}/",
+            max_results=100
+        )
+        
+        debug_html = f"<h2>Debug Files for {user_id}</h2>"
+        debug_html += f"<p>Found {len(result.get('resources', []))} metadata files:</p>"
+        
+        for resource in result.get('resources', []):
+            debug_html += f"<p>📄 {resource['public_id']}</p>"
+            try:
+                file_data = download_json(resource['public_id'])
+                if file_data:
+                    debug_html += f"<pre>{json.dumps(file_data, indent=2)}</pre>"
+            except Exception as e:
+                debug_html += f"<p>❌ Error: {e}</p>"
+        
+        return debug_html
+        
+    except Exception as e:
+        return f"<p>❌ Debug error: {e}</p>"
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
@@ -551,6 +583,7 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
