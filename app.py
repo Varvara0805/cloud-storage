@@ -124,36 +124,32 @@ def get_user_files(user_id):
         return []
 
 def save_file(file_data):
-    """Сохраняем метаданные файла в Cloudinary"""
+   
     try:
         file_id = file_data['file_id']
         user_id = file_data['user_id']
         
-        print(f"🔧 Saving file metadata: {file_id} for user {user_id}")
+        print(f"🔧 Saving metadata for file: {file_id}")
         
-        # Простой способ - сохраняем как JSON строку
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(file_data, f, ensure_ascii=False, indent=2)
-            f.flush()
-            
-            result = cloudinary.uploader.upload(
-                f.filename,
-                public_id=f"database/files/{user_id}/{file_id}",
-                resource_type="raw"
-            )
+        # Преобразуем данные в JSON строку
+        json_str = json.dumps(file_data, ensure_ascii=False)
         
-        os.unlink(f.name)
+        # Сохраняем как raw файл в Cloudinary
+        result = cloudinary.uploader.upload(
+            json_str.encode('utf-8'),
+            public_id=f"database/files/{user_id}/{file_id}",
+            resource_type="raw"
+        )
         
         if result:
-            print(f"✅ File metadata saved: {file_id}")
+            print(f"✅ Metadata saved: {file_id}")
             return True
         else:
-            print(f"❌ File metadata save failed: {file_id}")
+            print(f"❌ Metadata save failed: {file_id}")
             return False
             
     except Exception as e:
-        print(f"❌ Error saving file metadata: {e}")
+        print(f"❌ Error saving metadata: {e}")
         return False
 
 def delete_file_data(user_id, file_id):
@@ -555,6 +551,7 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
