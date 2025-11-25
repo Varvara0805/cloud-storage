@@ -67,23 +67,7 @@ def delete_session(session_id):
             pass
 
 # 🔧 БАЗА ДАННЫХ В CLOUDINARY (остается без изменений)
-def get_users():
-    """Получаем пользователей из Cloudinary"""
-    try:
-        result = cloudinary.api.resources(
-            type='upload',
-            prefix='storage/users/',
-            max_results=100
-        )
-        users = {}
-        for resource in result.get('resources', []):
-            user_data = download_json(resource['public_id'])
-            if user_data:
-                users[user_data['username']] = user_data
-        return users
-    except:
-        # Создаем тестового пользователя если нет пользователей
-        return {'admin': {'username': 'admin', 'password': generate_password_hash('admin123')}}
+admin123
 
 def save_user(username, password_hash):
     """Сохраняем пользователя в Cloudinary"""
@@ -516,3 +500,4 @@ if __name__ == '__main__':
     print("✅ Persistent sessions enabled!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
