@@ -28,48 +28,47 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 ВСЕ ДАННЫЕ ХРАНЯТСЯ В CLOUDINARY
-def get_users():
-    """Получаем пользователей из Cloudinary"""
+# 🔧 ПРОСТОЕ ХРАНИЛИЩЕ В CLOUDINARY
+def upload_json(data, public_id):
+    """Загружает JSON в Cloudinary"""
     try:
-        result = cloudinary.api.resources(type='upload', prefix='db/users/', max_results=100)
-        users = {}
-        for resource in result.get('resources', []):
-            url = cloudinary.utils.cloudinary_url(resource['public_id'], resource_type='raw')[0]
-            response = requests.get(url)
-            if response.status_code == 200:
-                user_data = response.json()
-                users[user_data['username']] = user_data
-        return users
+        json_str = json.dumps(data, ensure_ascii=False).encode('utf-8')
+        result = cloudinary.uploader.upload(
+            json_str,
+            public_id=public_id,
+            resource_type="raw"
+        )
+        return True
     except:
-        return {}
+        return False
 
-def save_user(username, password_hash):
-    """Сохраняем пользователя в Cloudinary"""
-    user_data = {'username': username, 'password': password_hash, 'created_at': datetime.now().isoformat()}
-    json_str = json.dumps(user_data).encode('utf-8')
-    cloudinary.uploader.upload(json_str, public_id=f"db/users/{username}", resource_type="raw")
-    return True
+def download_json(public_id):
+    """Скачивает JSON из Cloudinary"""
+    try:
+        url = cloudinary.utils.cloudinary_url(public_id, resource_type='raw')[0]
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+    except:
+        return None
+
+# 🔧 БАЗА ДАННЫХ
+def get_users():
+    users = download_json('db/users') or {}
+    # Автоматически создаем admin если нет пользователей
+    if not users:
+        users = {'admin': {'username': 'admin', 'password': generate_password_hash('admin123')}}
+        upload_json(users, 'db/users')
+    return users
+
+def save_users(users):
+    return upload_json(users, 'db/users')
 
 def get_user_files(user_id):
-    """Получаем файлы пользователя из Cloudinary"""
-    try:
-        result = cloudinary.api.resources(type='upload', prefix=f'db/files/{user_id}/', max_results=100)
-        files = []
-        for resource in result.get('resources', []):
-            url = cloudinary.utils.cloudinary_url(resource['public_id'], resource_type='raw')[0]
-            response = requests.get(url)
-            if response.status_code == 200:
-                files.append(response.json())
-        return sorted(files, key=lambda x: x.get('uploaded_at', ''), reverse=True)
-    except:
-        return []
+    return download_json(f'db/files_{user_id}') or []
 
 def save_user_files(user_id, files):
-    """Сохраняем список файлов пользователя в Cloudinary"""
-    json_str = json.dumps(files).encode('utf-8')
-    cloudinary.uploader.upload(json_str, public_id=f"db/files/{user_id}", resource_type="raw")
-    return True
+    return upload_json(files, f'db/files_{user_id}')
 
 # 🔧 ФУНКЦИИ ШИФРОВАНИЯ
 def encrypt_file(file_data):
@@ -105,12 +104,6 @@ def login():
         password = request.form['password']
         users = get_users()
         
-        # Автоматически создаем admin если нет пользователей
-        if not users:
-            admin_hash = generate_password_hash('admin123')
-            save_user('admin', admin_hash)
-            users = {'admin': {'username': 'admin', 'password': admin_hash}}
-        
         user = users.get(username)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = username
@@ -119,14 +112,14 @@ def login():
             return redirect('/dashboard')
         add_flash_message('Invalid credentials', 'error')
     
-    return '''
+    return f'''
     <html><body style="margin: 50px; font-family: Arial;">
         <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
             <h2>🔐 Login</h2>
             <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
                 <strong>Test:</strong> admin / admin123
             </div>
-            ''' + get_flash_html() + '''
+            {get_flash_html()}
             <form method="POST">
                 <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
                 <input type="password" name="password" placeholder="Password" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
@@ -151,17 +144,18 @@ def register():
             add_flash_message('User exists', 'error')
             return redirect('/register')
         
-        save_user(username, generate_password_hash(password))
-        save_user_files(username, [])  # Создаем пустой список файлов
+        users[username] = {'username': username, 'password': generate_password_hash(password)}
+        save_users(users)
+        save_user_files(username, [])
         
         add_flash_message('Registration successful!', 'success')
         return redirect('/login')
     
-    return '''
+    return f'''
     <html><body style="margin: 50px; font-family: Arial;">
         <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
             <h2>📝 Register</h2>
-            ''' + get_flash_html() + '''
+            {get_flash_html()}
             <form method="POST">
                 <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
                 <input type="password" name="password" placeholder="Password (6+ chars)" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
@@ -184,10 +178,10 @@ def dashboard():
     for file in user_files:
         files_html += f'''
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
-            <div><strong>📁 {file['name']}</strong><br><small>Size: {file['size']} KB</small></div>
+            <div><strong>📁 {file["name"]}</strong><br><small>Size: {file["size"]} KB</small></div>
             <div>
-                <a href="/download/{file['id']}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
-                <a href="/delete/{file['id']}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
+                <a href="/download/{file["id"]}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
+                <a href="/delete/{file["id"]}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
             </div>
         </div>
         '''
@@ -199,7 +193,7 @@ def dashboard():
     <html><body style="margin: 0; font-family: Arial; background: #f0f0f0;">
         <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
             <h2 style="margin: 0;">☁️ Cloud Storage</h2>
-            <div>Welcome, <strong>{session['username']}</strong>! 
+            <div>Welcome, <strong>{session["username"]}</strong>! 
                 <a href="/logout" style="margin-left: 20px; background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">Logout</a>
             </div>
         </div>
