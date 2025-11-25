@@ -28,49 +28,11 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 ПРОСТОЕ ХРАНИЛИЩЕ В CLOUDINARY
-def upload_json(data, public_id):
-    """Загружает JSON в Cloudinary"""
-    try:
-        json_str = json.dumps(data, ensure_ascii=False).encode('utf-8')
-        result = cloudinary.uploader.upload(
-            json_str,
-            public_id=public_id,
-            resource_type="raw"
-        )
-        return True
-    except:
-        return False
+# 🔧 ПРОСТОЕ ХРАНИЛИЩЕ В ПАМЯТИ (для теста)
+users = {'admin': {'password': generate_password_hash('admin123'), 'username': 'admin'}}
+files_db = {}
 
-def download_json(public_id):
-    """Скачивает JSON из Cloudinary"""
-    try:
-        url = cloudinary.utils.cloudinary_url(public_id, resource_type='raw')[0]
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
-    except:
-        return None
-
-# 🔧 БАЗА ДАННЫХ
-def get_users():
-    users = download_json('db/users') or {}
-    # Автоматически создаем admin если нет пользователей
-    if not users:
-        users = {'admin': {'username': 'admin', 'password': generate_password_hash('admin123')}}
-        upload_json(users, 'db/users')
-    return users
-
-def save_users(users):
-    return upload_json(users, 'db/users')
-
-def get_user_files(user_id):
-    return download_json(f'db/files_{user_id}') or []
-
-def save_user_files(user_id, files):
-    return upload_json(files, f'db/files_{user_id}')
-
-# 🔧 ФУНКЦИИ ШИФРОВАНИЯ
+# 🔧 ФУНКЦИИ
 def encrypt_file(file_data):
     return cipher_suite.encrypt(file_data)
 
@@ -102,8 +64,6 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        users = get_users()
-        
         user = users.get(username)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = username
@@ -138,16 +98,11 @@ def register():
         if len(password) < 6:
             add_flash_message('Password too short', 'error')
             return redirect('/register')
-        
-        users = get_users()
         if username in users:
             add_flash_message('User exists', 'error')
             return redirect('/register')
-        
-        users[username] = {'username': username, 'password': generate_password_hash(password)}
-        save_users(users)
-        save_user_files(username, [])
-        
+        users[username] = {'password': generate_password_hash(password), 'username': username}
+        files_db[username] = []
         add_flash_message('Registration successful!', 'success')
         return redirect('/login')
     
@@ -172,28 +127,28 @@ def dashboard():
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    user_files = files_db.get(user_id, [])
     
     files_html = ""
     for file in user_files:
         files_html += f'''
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
-            <div><strong>📁 {file["name"]}</strong><br><small>Size: {file["size"]} KB</small></div>
+            <div><strong>📁 {file['name']}</strong><br><small>Size: {file['size']} KB | Uploaded: {file['date']}</small></div>
             <div>
-                <a href="/download/{file["id"]}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
-                <a href="/delete/{file["id"]}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
+                <a href="/download/{file['id']}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
+                <a href="/delete/{file['id']}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
             </div>
         </div>
         '''
     
     if not files_html:
-        files_html = '<p style="text-align: center; color: #666; padding: 40px;">No files yet</p>'
+        files_html = '<p style="text-align: center; color: #666; padding: 40px;">No files yet. Upload your first file!</p>'
     
     return f'''
     <html><body style="margin: 0; font-family: Arial; background: #f0f0f0;">
         <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
             <h2 style="margin: 0;">☁️ Cloud Storage</h2>
-            <div>Welcome, <strong>{session["username"]}</strong>! 
+            <div>Welcome, <strong>{session['username']}</strong>! 
                 <a href="/logout" style="margin-left: 20px; background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">Logout</a>
             </div>
         </div>
@@ -246,24 +201,23 @@ def upload_file():
             resource_type="raw"
         )
         
-        # Получаем текущие файлы и добавляем новый
-        user_files = get_user_files(user_id)
-        user_files.append({
+        # Сохраняем в базу
+        if user_id not in files_db:
+            files_db[user_id] = []
+        
+        files_db[user_id].append({
             'id': file_id,
             'name': filename,
             'size': round(file_size / 1024, 1),
             'url': result['secure_url'],
             'public_id': result['public_id'],
-            'uploaded_at': datetime.now().isoformat()
+            'date': datetime.now().strftime("%Y-%m-%d %H:%M")
         })
         
-        # Сохраняем обновленный список
-        save_user_files(user_id, user_files)
-        
-        add_flash_message(f'File "{filename}" uploaded successfully!', 'success')
+        add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
         
     except Exception as e:
-        add_flash_message(f'Upload error: {str(e)}', 'error')
+        add_flash_message(f'❌ Upload error: {str(e)}', 'error')
     
     return redirect('/dashboard')
 
@@ -273,7 +227,7 @@ def download_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    user_files = files_db.get(user_id, [])
     
     file_data = next((f for f in user_files if f['id'] == file_id), None)
     if file_data:
@@ -294,13 +248,10 @@ def delete_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    if user_id in files_db:
+        files_db[user_id] = [f for f in files_db[user_id] if f['id'] != file_id]
+        add_flash_message('File deleted', 'success')
     
-    # Удаляем файл из списка
-    user_files = [f for f in user_files if f['id'] != file_id]
-    save_user_files(user_id, user_files)
-    
-    add_flash_message('File deleted', 'success')
     return redirect('/dashboard')
 
 @app.route('/logout')
