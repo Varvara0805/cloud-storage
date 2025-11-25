@@ -70,13 +70,27 @@ def get_users():
         return {'admin': {'username': 'admin', 'password': generate_password_hash('admin123')}}
 
 def save_user(username, password_hash):
-    """Сохраняем пользователя в Cloudinary"""
-    user_data = {
-        'username': username,
-        'password': password_hash,
-        'created_at': datetime.now().isoformat()
-    }
-    return upload_json(user_data, f'database/users/{username}')
+   
+    try:
+        user_data = {
+            'username': username,
+            'password': password_hash,
+            'created_at': datetime.now().isoformat()
+        }
+        print(f"🔧 Saving user: {username}")
+        
+        result = upload_json(user_data, f'database/users/{username}')
+        
+        if result:
+            print(f"✅ User {username} saved successfully!")
+            return True
+        else:
+            print(f"❌ Failed to save user {username}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error saving user {username}: {e}")
+        return False
 
 def get_user_files(user_id):
     """Получаем все файлы пользователя из Cloudinary"""
@@ -483,3 +497,4 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
