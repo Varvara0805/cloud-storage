@@ -11,10 +11,9 @@ import cloudinary.uploader
 import cloudinary.api
 import requests
 import json
-import time
 
 app = Flask(__name__)
-app.secret_key = 'super-secret-key-12345'
+app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # 🔧 НАСТРОЙКИ CLOUDINARY
@@ -29,18 +28,18 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 СИСТЕМА ХРАНЕНИЯ В CLOUDINARY
+# 🔧 ВСЕ ДАННЫЕ ХРАНЯТСЯ ТОЛЬКО В CLOUDINARY
 def save_to_cloudinary(data, path):
     """Сохраняет данные в Cloudinary"""
     try:
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        # Сохраняем как текстовый файл
         result = cloudinary.uploader.upload(
             json_str.encode('utf-8'),
-            public_id=f"storage/{path}",
-            resource_type="raw",
-            type="upload"
+            public_id=f"database/{path}",
+            resource_type="raw"
         )
-        print(f"✅ Saved: {path}")
+        print(f"✅ Saved to Cloudinary: {path}")
         return True
     except Exception as e:
         print(f"❌ Error saving {path}: {e}")
@@ -49,31 +48,25 @@ def save_to_cloudinary(data, path):
 def load_from_cloudinary(path):
     """Загружает данные из Cloudinary"""
     try:
-        url = cloudinary.utils.cloudinary_url(f"storage/{path}", resource_type='raw')[0]
-        response = requests.get(f"{url}?t={int(time.time())}", timeout=10)
+        url = cloudinary.utils.cloudinary_url(f"database/{path}", resource_type='raw')[0]
+        response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            print(f"✅ Loaded: {path}")
+            print(f"✅ Loaded from Cloudinary: {path} - {len(data) if isinstance(data, list) else 'dict'}")
             return data
-        else:
-            print(f"❌ Failed to load {path}: Status {response.status_code}")
     except Exception as e:
         print(f"❌ Error loading {path}: {e}")
     return None
 
-# 🔧 БАЗА ДАННЫХ
+# 🔧 БАЗА ДАННЫХ В CLOUDINARY
 def get_users():
     """Получает всех пользователей"""
-    users = load_from_cloudinary("users")
+    users = load_from_cloudinary("users") or {}
+    # Создаем admin если нет пользователей
     if not users:
-        # СОЗДАЕМ ТЕСТОВЫХ ПОЛЬЗОВАТЕЛЕЙ - ПРОСТАЯ СТРУКТУРА
-        users = {
-            "admin": generate_password_hash("admin123"),
-            "demo": generate_password_hash("demo123"),
-            "test": generate_password_hash("test123")
-        }
+        users = {"admin": {"username": "admin", "password": generate_password_hash("admin123")}}
         save_to_cloudinary(users, "users")
-        print("🔧 Created test users: admin, demo, test")
+        print("🔧 Created default admin user")
     return users
 
 def save_users(users):
@@ -82,19 +75,12 @@ def save_users(users):
 
 def get_user_files(user_id):
     """Получает файлы пользователя"""
-    files = load_from_cloudinary(f"files_{user_id}")
-    if files is None:
-        files = []
-        print(f"📁 No files found for {user_id}, creating empty list")
-    else:
-        print(f"📁 Loaded {len(files)} files for {user_id}")
-        for file in files:
-            print(f"   - {file['name']} ({file['size']} KB)")
+    files = load_from_cloudinary(f"files_{user_id}") or []
+    print(f"📁 Loaded {len(files)} files for user {user_id}")
     return files
 
 def save_user_files(user_id, files):
     """Сохраняет файлы пользователя"""
-    print(f"💾 Saving {len(files)} files for {user_id}")
     return save_to_cloudinary(files, f"files_{user_id}")
 
 # 🔧 ФУНКЦИИ ШИФРОВАНИЯ
@@ -106,14 +92,14 @@ def decrypt_file(encrypted_data):
 
 # 🔧 СИСТЕМА СООБЩЕНИЙ
 messages = []
-def add_message(msg, type='info'):
-    messages.append((type, msg))
-def get_messages():
+def add_flash_message(message, category='info'):
+    messages.append((category, message))
+def get_flash_html():
     global messages
     html = ''
-    for type, msg in messages:
-        color = 'red' if type == 'error' else 'green' if type == 'success' else 'blue'
-        html += f'<div style="color: {color}; padding: 10px; margin: 10px 0; border: 1px solid {color}">{msg}</div>'
+    for category, message in messages:
+        color = '#c62828' if category == 'error' else '#2e7d32' if category == 'success' else '#1565c0'
+        html += f'<div style="background: #f5f5f5; color: {color}; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid {color}">{message}</div>'
     messages = []
     return html
 
@@ -129,120 +115,68 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        
-        # ЗАГРУЖАЕМ СВЕЖИХ ПОЛЬЗОВАТЕЛЕЙ
         users = get_users()
-        print(f"🔍 Login attempt: {username}")
-        print(f"🔍 Available users: {list(users.keys())}")
-        print(f"🔍 Users data: {users}")
         
-        if username in users:
-            print(f"🔍 User {username} found, checking password...")
-            if check_password_hash(users[username], password):
-                session['user_id'] = username
-                session['username'] = username
-                add_message('Login successful!', 'success')
-                return redirect('/dashboard')
-            else:
-                print(f"❌ Wrong password for {username}")
-                add_message('Wrong password', 'error')
-        else:
-            print(f"❌ User {username} not found")
-            add_message('User not found', 'error')
+        user = users.get(username)
+        if user and check_password_hash(user['password'], password):
+            session['user_id'] = username
+            session['username'] = username
+            add_flash_message('Login successful!', 'success')
+            return redirect('/dashboard')
+        add_flash_message('Invalid credentials', 'error')
     
-    return '''
-    <html>
-    <head><title>Login</title></head>
-    <body style="font-family: Arial; margin: 50px;">
-        <h2>🔐 Login</h2>
-        <div style="background: #f0f0f0; padding: 15px; margin: 20px 0;">
-            <strong>Test Accounts:</strong><br>
-            👤 admin / admin123<br>
-            👤 demo / demo123<br>
-            👤 test / test123
+    return f'''
+    <html><body style="margin: 50px; font-family: Arial;">
+        <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+            <h2>🔐 Login</h2>
+            <div style="background: #e3f2fd; padding: 10px; border-radius: 5px; margin-bottom: 20px;">
+                <strong>Test:</strong> admin / admin123
+            </div>
+            {get_flash_html()}
+            <form method="POST">
+                <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+                <input type="password" name="password" placeholder="Password" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+                <button type="submit" style="width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Login</button>
+            </form>
+            <p style="text-align: center; margin-top: 20px;"><a href="/register">Create account</a></p>
         </div>
-        ''' + get_messages() + '''
-        <form method="POST" style="max-width: 300px;">
-            <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-            <input type="password" name="password" placeholder="Password" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-            <button type="submit" style="width: 100%; padding: 12px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">🚀 Login</button>
-        </form>
-        <p style="text-align: center; margin-top: 20px;"><a href="/register">Create new account</a></p>
-    </body>
-    </html>
+    </body></html>
     '''
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username'].strip()
+        username = request.form['username']
         password = request.form['password']
-        
-        if len(username) < 3:
-            add_message('Username must be at least 3 characters', 'error')
-            return redirect('/register')
-        
         if len(password) < 6:
-            add_message('Password must be at least 6 characters', 'error')
+            add_flash_message('Password too short', 'error')
             return redirect('/register')
         
-        # ЗАГРУЖАЕМ СВЕЖИХ ПОЛЬЗОВАТЕЛЕЙ
         users = get_users()
-        print(f"🔍 Register attempt: {username}")
-        print(f"🔍 Current users: {list(users.keys())}")
-        
         if username in users:
-            add_message('Username already exists', 'error')
+            add_flash_message('User exists', 'error')
             return redirect('/register')
         
-        print(f"🔧 Creating new user: {username}")
+        users[username] = {'username': username, 'password': generate_password_hash(password)}
+        save_users(users)
+        save_user_files(username, [])  # Создаем пустой список файлов
         
-        # ДОБАВЛЯЕМ НОВОГО ПОЛЬЗОВАТЕЛЯ - ПРОСТАЯ СТРУКТУРА
-        users[username] = generate_password_hash(password)
-        
-        print(f"💾 Saving users: {list(users.keys())}")
-        
-        # СОХРАНЯЕМ ПОЛЬЗОВАТЕЛЕЙ
-        if save_users(users):
-            print(f"✅ User {username} saved")
-            
-            # ДАЕМ ВРЕМЯ CLOUDINARY СОХРАНИТЬ
-            time.sleep(2)
-            
-            # ПЕРЕЗАГРУЖАЕМ ДАННЫЕ ДЛЯ ПРОВЕРКИ
-            users = load_from_cloudinary("users")
-            print(f"🔄 Reloaded users: {list(users.keys())}")
-            
-            # ПРОВЕРЯЕМ ЧТО ПОЛЬЗОВАТЕЛЬ СОХРАНИЛСЯ
-            if username in users:
-                # СОЗДАЕМ ПУСТОЙ СПИСОК ФАЙЛОВ
-                save_user_files(username, [])
-                
-                # АВТОМАТИЧЕСКИ ВХОДИМ
-                session['user_id'] = username
-                session['username'] = username
-                add_message(f'🎉 Registration successful! Welcome {username}', 'success')
-                return redirect('/dashboard')
-            else:
-                add_message('User not saved properly - please try logging in manually', 'error')
-                return redirect('/login')
-        else:
-            add_message('Registration failed - could not save to Cloudinary', 'error')
+        add_flash_message('Registration successful!', 'success')
+        return redirect('/login')
     
-    return '''
-    <html>
-    <head><title>Register</title></head>
-    <body style="font-family: Arial; margin: 50px;">
-        <h2>📝 Register</h2>
-        ''' + get_messages() + '''
-        <form method="POST" style="max-width: 300px;">
-            <input type="text" name="username" placeholder="Username (3+ chars)" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-            <input type="password" name="password" placeholder="Password (6+ chars)" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
-            <button type="submit" style="width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">✅ Create Account</button>
-        </form>
-        <p style="text-align: center; margin-top: 20px;"><a href="/login">Back to login</a></p>
-    </body>
-    </html>
+    return f'''
+    <html><body style="margin: 50px; font-family: Arial;">
+        <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+            <h2>📝 Register</h2>
+            {get_flash_html()}
+            <form method="POST">
+                <input type="text" name="username" placeholder="Username" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+                <input type="password" name="password" placeholder="Password (6+ chars)" required style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+                <button type="submit" style="width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Register</button>
+            </form>
+            <p style="text-align: center; margin-top: 20px;"><a href="/login">Back to login</a></p>
+        </div>
+    </body></html>
     '''
 
 @app.route('/dashboard')
@@ -253,48 +187,33 @@ def dashboard():
     user_id = session['user_id']
     user_files = get_user_files(user_id)
     
-    print(f"🎯 Rendering dashboard for {user_id} with {len(user_files)} files")
-    
     files_html = ""
     for file in user_files:
         files_html += f'''
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; background: white; margin: 5px 0; border-radius: 5px;">
-            <div>
-                <strong>📁 {file['name']}</strong><br>
-                <small>Size: {file['size']} KB | Uploaded: {file['date']}</small>
-            </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
+            <div><strong>📁 {file['name']}</strong><br><small>Size: {file['size']} KB | Uploaded: {file['date']}</small></div>
             <div>
                 <a href="/download/{file['id']}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
-                <a href="/delete/{file['id']}" onclick="return confirm('Delete this file?')" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
+                <a href="/delete/{file['id']}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
             </div>
         </div>
         '''
     
     if not files_html:
-        files_html = '''
-        <div style="text-align: center; padding: 40px; color: #666; background: white; border-radius: 5px;">
-            <div style="font-size: 48px; margin-bottom: 20px;">📁</div>
-            <h3>No files yet</h3>
-            <p>Upload your first file to get started!</p>
-        </div>
-        '''
+        files_html = '<p style="text-align: center; color: #666; padding: 40px;">No files yet. Upload your first file!</p>'
     
     return f'''
-    <html>
-    <head><title>Dashboard</title></head>
-    <body style="margin: 0; font-family: Arial; background: #f0f0f0;">
-        <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <html><body style="margin: 0; font-family: Arial; background: #f0f0f0;">
+        <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
             <h2 style="margin: 0;">☁️ Cloud Storage</h2>
-            <div>
-                Welcome, <strong>{session['username']}</strong>! 
+            <div>Welcome, <strong>{session['username']}</strong>! 
                 <a href="/logout" style="margin-left: 20px; background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">Logout</a>
             </div>
         </div>
         
         <div style="max-width: 1000px; margin: 20px auto; padding: 20px;">
-            ''' + get_messages() + '''
-            
-            <div style="background: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            {get_flash_html()}
+            <div style="background: white; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
                 <h3 style="margin-top: 0;">📤 Upload File</h3>
                 <form method="POST" action="/upload" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center;">
                     <input type="file" name="file" required style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
@@ -302,15 +221,12 @@ def dashboard():
                 </form>
             </div>
             
-            <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="background: white; padding: 30px; border-radius: 10px;">
                 <h3 style="margin-top: 0;">📁 Your Files ({len(user_files)})</h3>
-                <div style="min-height: 100px;">
-                    {files_html}
-                </div>
+                <div style="border: 1px solid #eee; border-radius: 5px;">{files_html}</div>
             </div>
         </div>
-    </body>
-    </html>
+    </body></html>
     '''
 
 @app.route('/upload', methods=['POST'])
@@ -319,12 +235,12 @@ def upload_file():
         return redirect('/login')
     
     if 'file' not in request.files:
-        add_message('No file selected', 'error')
+        add_flash_message('No file selected', 'error')
         return redirect('/dashboard')
     
     file = request.files['file']
     if file.filename == '':
-        add_message('No file selected', 'error')
+        add_flash_message('No file selected', 'error')
         return redirect('/dashboard')
     
     try:
@@ -335,15 +251,14 @@ def upload_file():
         file_data = file.read()
         file_size = len(file_data)
         
-        print(f"📤 Uploading file: {filename} ({file_size} bytes) for user {user_id}")
+        print(f"🔧 Uploading file: {filename} ({file_size} bytes)")
         
         # Шифруем и загружаем в Cloudinary
         encrypted_data = encrypt_file(file_data)
         result = cloudinary.uploader.upload(
             encrypted_data,
-            public_id=f"user_files/{user_id}/{file_id}_{filename}",
-            resource_type="raw",
-            type="upload"
+            public_id=f"storage/{user_id}/{file_id}_{filename}",
+            resource_type="raw"
         )
         
         print(f"✅ File uploaded to Cloudinary: {result['secure_url']}")
@@ -361,16 +276,14 @@ def upload_file():
         user_files.append(new_file)
         
         # Сохраняем обновленный список
-        if save_user_files(user_id, user_files):
-            print(f"✅ File metadata saved for user {user_id}")
-            add_message(f'✅ File "{filename}" uploaded successfully!', 'success')
-        else:
-            print(f"❌ Failed to save file metadata for user {user_id}")
-            add_message(f'❌ Failed to save file info', 'error')
+        save_user_files(user_id, user_files)
+        
+        print(f"✅ File metadata saved for user {user_id}")
+        add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
         
     except Exception as e:
         print(f"❌ Upload error: {e}")
-        add_message(f'❌ Upload error: {str(e)}', 'error')
+        add_flash_message(f'❌ Upload error: {str(e)}', 'error')
     
     return redirect('/dashboard')
 
@@ -386,20 +299,12 @@ def download_file(file_id):
     if file_data:
         try:
             response = requests.get(file_data['url'])
-            if response.status_code == 200:
-                decrypted_data = decrypt_file(response.content)
-                return send_file(
-                    io.BytesIO(decrypted_data),
-                    as_attachment=True,
-                    download_name=file_data['name']
-                )
-            else:
-                add_message('File not found on server', 'error')
-        except Exception as e:
-            print(f"❌ Download error: {e}")
-            add_message('Download error', 'error')
+            decrypted_data = decrypt_file(response.content)
+            return send_file(io.BytesIO(decrypted_data), as_attachment=True, download_name=file_data['name'])
+        except:
+            add_flash_message('Download error', 'error')
     else:
-        add_message('File not found', 'error')
+        add_flash_message('File not found', 'error')
     
     return redirect('/dashboard')
 
@@ -411,65 +316,21 @@ def delete_file(file_id):
     user_id = session['user_id']
     user_files = get_user_files(user_id)
     
-    file_to_delete = next((f for f in user_files if f['id'] == file_id), None)
-    if file_to_delete:
-        try:
-            # Удаляем файл из Cloudinary
-            cloudinary.uploader.destroy(file_to_delete['public_id'], resource_type="raw")
-            print(f"✅ Deleted file from Cloudinary: {file_to_delete['public_id']}")
-        except Exception as e:
-            print(f"⚠️ Could not delete from Cloudinary: {e}")
+    # Удаляем файл из списка
+    user_files = [f for f in user_files if f['id'] != file_id]
+    save_user_files(user_id, user_files)
     
-        # Удаляем из списка файлов
-        user_files = [f for f in user_files if f['id'] != file_id]
-        
-        # Сохраняем обновленный список
-        if save_user_files(user_id, user_files):
-            add_message('File deleted successfully', 'success')
-        else:
-            add_message('File deleted but failed to save changes', 'error')
-    else:
-        add_message('File not found', 'error')
-    
+    add_flash_message('File deleted', 'success')
     return redirect('/dashboard')
-
-@app.route('/debug')
-def debug():
-    if 'user_id' not in session:
-        return redirect('/login')
-    
-    users = get_users()
-    debug_html = ""
-    for username in users.keys():
-        files = get_user_files(username)
-        debug_html += f'<div style="padding: 10px; border: 1px solid #ccc; margin: 5px 0;">{username}: {len(files)} files</div>'
-    
-    return f'''
-    <html>
-    <head><title>Debug</title></head>
-    <body style="font-family: Arial; margin: 20px;">
-        <h2>Debug Info</h2>
-        <a href="/dashboard" style="color: blue; text-decoration: none;">← Back to Dashboard</a>
-        <h3>Users: {len(users)}</h3>
-        {debug_html}
-    </body>
-    </html>
-    '''
 
 @app.route('/logout')
 def logout():
-    username = session.get('username', 'Unknown')
     session.clear()
-    add_message(f'Logged out from {username}', 'info')
+    add_flash_message('Logged out', 'info')
     return redirect('/login')
 
 if __name__ == '__main__':
     print("🚀 Starting Secure Cloud Storage...")
     print("✅ Cloudinary database configured!")
-    
-    # Инициализируем базу данных
-    users = get_users()
-    print(f"👥 Loaded {len(users)} users: {list(users.keys())}")
-    
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
