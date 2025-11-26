@@ -46,28 +46,21 @@ def save_to_cloudinary(data, path):
         print(f"❌ Error saving {path}: {e}")
         return False
 
-def load_from_cloudinary(path, max_retries=3):
-    """Загружает данные из Cloudinary с повторными попытками"""
-    for attempt in range(max_retries):
-        try:
-            url = cloudinary.utils.cloudinary_url(f"database/{path}", resource_type='raw')[0]
-            # Добавляем timestamp чтобы избежать кеширования
-            url_with_timestamp = f"{url}?t={int(time.time())}"
-            response = requests.get(url_with_timestamp)
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Loaded from Cloudinary: {path} - {len(data) if isinstance(data, list) else 'dict'}")
-                return data
-            else:
-                print(f"⚠️ Attempt {attempt + 1}: Failed to load {path}, status: {response.status_code}")
-        except Exception as e:
-            print(f"⚠️ Attempt {attempt + 1}: Error loading {path}: {e}")
-        
-        # Ждем перед следующей попыткой
-        if attempt < max_retries - 1:
-            time.sleep(2)
-    
-    print(f"❌ Failed to load {path} after {max_retries} attempts")
+def load_from_cloudinary(path):
+    """Загружает данные из Cloudinary"""
+    try:
+        url = cloudinary.utils.cloudinary_url(f"database/{path}", resource_type='raw')[0]
+        # Добавляем случайный параметр чтобы избежать кеширования
+        url_with_cache_buster = f"{url}?t={int(time.time())}"
+        response = requests.get(url_with_cache_buster)
+        if response.status_code == 200:
+            data = response.json()
+            print(f"✅ Loaded from Cloudinary: {path}")
+            return data
+        else:
+            print(f"❌ Failed to load {path}, status: {response.status_code}")
+    except Exception as e:
+        print(f"❌ Error loading {path}: {e}")
     return None
 
 # 🔧 БАЗА ДАННЫХ В CLOUDINARY
@@ -83,11 +76,7 @@ def get_users():
 
 def save_users(users):
     """Сохраняет пользователей"""
-    success = save_to_cloudinary(users, "users")
-    if success:
-        # Даем время Cloudinary обработать файл
-        time.sleep(3)
-    return success
+    return save_to_cloudinary(users, "users")
 
 def get_user_files(user_id):
     """Получает файлы пользователя"""
@@ -210,40 +199,21 @@ def register():
         
         # Сохраняем пользователей
         if save_users(users):
-            print(f"✅ Users saved successfully, waiting for Cloudinary...")
+            print(f"✅ Users saved successfully")
+            
+            # Создаем пустой список файлов для пользователя
+            save_user_files(username, [])
+            print(f"✅ User files storage created for {username}")
+            
+            # ВХОДИМ АВТОМАТИЧЕСКИ вместо проверки
+            session['user_id'] = username
+            session['username'] = username
+            add_flash_message(f'🎉 Registration successful! Welcome {username}.', 'success')
+            return redirect('/dashboard')
         else:
             print(f"❌ Failed to save users")
             add_flash_message('Registration failed - please try again', 'error')
             return redirect('/register')
-        
-        # Создаем пустой список файлов для пользователя
-        if save_user_files(username, []):
-            print(f"✅ User files storage created for {username}")
-        else:
-            print(f"❌ Failed to create user files storage")
-        
-        # Даем больше времени для сохранения в Cloudinary и проверяем несколько раз
-        verification_passed = False
-        for i in range(5):  # 5 попыток с задержкой
-            print(f"🔄 Verification attempt {i+1} for user {username}...")
-            time.sleep(3)  # Ждем 3 секунды между попытками
-            
-            verify_users = get_users()
-            if username in verify_users:
-                print(f"✅ User {username} verified in database!")
-                verification_passed = True
-                break
-            else:
-                print(f"⚠️ User {username} not found yet, retrying...")
-        
-        if verification_passed:
-            add_flash_message(f'🎉 Registration successful! Welcome {username}. You can now login.', 'success')
-        else:
-            print(f"❌ User {username} NOT found in database after multiple attempts")
-            print(f"🔍 Final users in database: {list(verify_users.keys())}")
-            add_flash_message('Registration completed but verification failed. Please try logging in manually.', 'warning')
-        
-        return redirect('/login')
     
     return f'''
     <html><body style="margin: 50px; font-family: Arial;">
@@ -324,7 +294,7 @@ def dashboard():
     </body></html>
     '''
 
-# ... остальные маршруты остаются без изменений (upload, download, delete, debug, logout)
+# ... остальные маршруты (upload, download, delete, debug, logout) остаются без изменений
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
