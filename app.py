@@ -11,6 +11,7 @@ import cloudinary.uploader
 import cloudinary.api
 import requests
 import json
+import sqlite3
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
@@ -28,62 +29,49 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 ВСЕ ДАННЫЕ ХРАНЯТСЯ ТОЛЬКО В CLOUDINARY
-def save_to_cloudinary(data, path):
-    """Сохраняет данные в Cloudinary"""
-    try:
-        json_str = json.dumps(data, ensure_ascii=False, indent=2)
-        # Сохраняем как текстовый файл
-        result = cloudinary.uploader.upload(
-            json_str.encode('utf-8'),
-            public_id=f"database/{path}",
-            resource_type="raw"
+# 🔧 БАЗА ДАННЫХ SQLite
+def get_db():
+    conn = sqlite3.connect('/tmp/cloud_storage.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        print(f"✅ Saved to Cloudinary: {path}")
-        return True
-    except Exception as e:
-        print(f"❌ Error saving {path}: {e}")
-        return False
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS files (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id TEXT UNIQUE NOT NULL,
+            filename TEXT NOT NULL,
+            original_filename TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            file_size INTEGER,
+            cloudinary_url TEXT,
+            cloudinary_public_id TEXT,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Создаем тестового пользователя
+    cursor = conn.execute('SELECT COUNT(*) as count FROM users')
+    if cursor.fetchone()['count'] == 0:
+        hashed_pw = generate_password_hash('admin123')
+        conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', ('admin', hashed_pw))
+    
+    conn.commit()
+    conn.close()
 
-def load_from_cloudinary(path):
-    """Загружает данные из Cloudinary"""
-    try:
-        url = cloudinary.utils.cloudinary_url(f"database/{path}", resource_type='raw')[0]
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            print(f"✅ Loaded from Cloudinary: {path} - {len(data) if isinstance(data, list) else 'dict'}")
-            return data
-    except Exception as e:
-        print(f"❌ Error loading {path}: {e}")
-    return None
+# Инициализируем базу при запуске
+init_db()
 
-# 🔧 БАЗА ДАННЫХ В CLOUDINARY
-def get_users():
-    """Получает всех пользователей"""
-    users = load_from_cloudinary("users") or {}
-    # Создаем admin если нет пользователей
-    if not users:
-        users = {"admin": {"username": "admin", "password": generate_password_hash("admin123")}}
-        save_to_cloudinary(users, "users")
-        print("🔧 Created default admin user")
-    return users
-
-def save_users(users):
-    """Сохраняет пользователей"""
-    return save_to_cloudinary(users, "users")
-
-def get_user_files(user_id):
-    """Получает файлы пользователя"""
-    files = load_from_cloudinary(f"files_{user_id}") or []
-    print(f"📁 Loaded {len(files)} files for user {user_id}")
-    return files
-
-def save_user_files(user_id, files):
-    """Сохраняет файлы пользователя"""
-    return save_to_cloudinary(files, f"files_{user_id}")
-
-# 🔧 ФУНКЦИИ ШИФРОВАНИЯ
+# 🔧 ФУНКЦИИ
 def encrypt_file(file_data):
     return cipher_suite.encrypt(file_data)
 
@@ -115,12 +103,14 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        users = get_users()
         
-        user = users.get(username)
+        conn = get_db()
+        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        conn.close()
+        
         if user and check_password_hash(user['password'], password):
-            session['user_id'] = username
-            session['username'] = username
+            session['user_id'] = user['username']
+            session['username'] = user['username']
             add_flash_message('Login successful!', 'success')
             return redirect('/dashboard')
         add_flash_message('Invalid credentials', 'error')
@@ -152,17 +142,17 @@ def register():
             add_flash_message('Password too short', 'error')
             return redirect('/register')
         
-        users = get_users()
-        if username in users:
-            add_flash_message('User exists', 'error')
-            return redirect('/register')
-        
-        users[username] = {'username': username, 'password': generate_password_hash(password)}
-        save_users(users)
-        save_user_files(username, [])  # Создаем пустой список файлов
-        
-        add_flash_message('Registration successful!', 'success')
-        return redirect('/login')
+        conn = get_db()
+        try:
+            hashed_pw = generate_password_hash(password)
+            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed_pw))
+            conn.commit()
+            add_flash_message('Registration successful!', 'success')
+            return redirect('/login')
+        except sqlite3.IntegrityError:
+            add_flash_message('User already exists', 'error')
+        finally:
+            conn.close()
     
     return f'''
     <html><body style="margin: 50px; font-family: Arial;">
@@ -185,16 +175,22 @@ def dashboard():
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    
+    conn = get_db()
+    files_list = conn.execute(
+        'SELECT * FROM files WHERE user_id = ? ORDER BY uploaded_at DESC', 
+        (user_id,)
+    ).fetchall()
+    conn.close()
     
     files_html = ""
-    for file in user_files:
+    for file in files_list:
         files_html += f'''
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
-            <div><strong>📁 {file['name']}</strong><br><small>Size: {file['size']} KB | Uploaded: {file['date']}</small></div>
+            <div><strong>📁 {file["original_filename"]}</strong><br><small>Size: {round(file["file_size"]/1024, 1)} KB</small></div>
             <div>
-                <a href="/download/{file['id']}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
-                <a href="/delete/{file['id']}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
+                <a href="/download/{file["file_id"]}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
+                <a href="/delete/{file["file_id"]}" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
             </div>
         </div>
         '''
@@ -206,7 +202,7 @@ def dashboard():
     <html><body style="margin: 0; font-family: Arial; background: #f0f0f0;">
         <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center;">
             <h2 style="margin: 0;">☁️ Cloud Storage</h2>
-            <div>Welcome, <strong>{session['username']}</strong>! 
+            <div>Welcome, <strong>{session["username"]}</strong>! 
                 <a href="/logout" style="margin-left: 20px; background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">Logout</a>
             </div>
         </div>
@@ -222,7 +218,7 @@ def dashboard():
             </div>
             
             <div style="background: white; padding: 30px; border-radius: 10px;">
-                <h3 style="margin-top: 0;">📁 Your Files ({len(user_files)})</h3>
+                <h3 style="margin-top: 0;">📁 Your Files ({len(files_list)})</h3>
                 <div style="border: 1px solid #eee; border-radius: 5px;">{files_html}</div>
             </div>
         </div>
@@ -251,8 +247,6 @@ def upload_file():
         file_data = file.read()
         file_size = len(file_data)
         
-        print(f"🔧 Uploading file: {filename} ({file_size} bytes)")
-        
         # Шифруем и загружаем в Cloudinary
         encrypted_data = encrypt_file(file_data)
         result = cloudinary.uploader.upload(
@@ -261,28 +255,18 @@ def upload_file():
             resource_type="raw"
         )
         
-        print(f"✅ File uploaded to Cloudinary: {result['secure_url']}")
+        # Сохраняем в базу данных
+        conn = get_db()
+        conn.execute('''
+            INSERT INTO files (file_id, filename, original_filename, user_id, file_size, cloudinary_url, cloudinary_public_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (file_id, f"{file_id}_{filename}", filename, user_id, file_size, result['secure_url'], result['public_id']))
+        conn.commit()
+        conn.close()
         
-        # Получаем текущие файлы и добавляем новый
-        user_files = get_user_files(user_id)
-        new_file = {
-            'id': file_id,
-            'name': filename,
-            'size': round(file_size / 1024, 1),
-            'url': result['secure_url'],
-            'public_id': result['public_id'],
-            'date': datetime.now().strftime("%Y-%m-%d %H:%M")
-        }
-        user_files.append(new_file)
-        
-        # Сохраняем обновленный список
-        save_user_files(user_id, user_files)
-        
-        print(f"✅ File metadata saved for user {user_id}")
         add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
         
     except Exception as e:
-        print(f"❌ Upload error: {e}")
         add_flash_message(f'❌ Upload error: {str(e)}', 'error')
     
     return redirect('/dashboard')
@@ -292,15 +276,18 @@ def download_file(file_id):
     if 'user_id' not in session:
         return redirect('/login')
     
-    user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    conn = get_db()
+    file = conn.execute(
+        'SELECT * FROM files WHERE file_id = ? AND user_id = ?', 
+        (file_id, session['user_id'])
+    ).fetchone()
+    conn.close()
     
-    file_data = next((f for f in user_files if f['id'] == file_id), None)
-    if file_data:
+    if file:
         try:
-            response = requests.get(file_data['url'])
+            response = requests.get(file['cloudinary_url'])
             decrypted_data = decrypt_file(response.content)
-            return send_file(io.BytesIO(decrypted_data), as_attachment=True, download_name=file_data['name'])
+            return send_file(io.BytesIO(decrypted_data), as_attachment=True, download_name=file['original_filename'])
         except:
             add_flash_message('Download error', 'error')
     else:
@@ -313,12 +300,10 @@ def delete_file(file_id):
     if 'user_id' not in session:
         return redirect('/login')
     
-    user_id = session['user_id']
-    user_files = get_user_files(user_id)
-    
-    # Удаляем файл из списка
-    user_files = [f for f in user_files if f['id'] != file_id]
-    save_user_files(user_id, user_files)
+    conn = get_db()
+    conn.execute('DELETE FROM files WHERE file_id = ? AND user_id = ?', (file_id, session['user_id']))
+    conn.commit()
+    conn.close()
     
     add_flash_message('File deleted', 'success')
     return redirect('/dashboard')
@@ -330,7 +315,5 @@ def logout():
     return redirect('/login')
 
 if __name__ == '__main__':
-    print("🚀 Starting Secure Cloud Storage...")
-    print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
