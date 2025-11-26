@@ -29,137 +29,82 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ ДАННЫХ
-users_db = {}
-user_files_db = {}
+# 🔧 ЛОКАЛЬНОЕ ХРАНИЛИЩЕ (основное)
+USERS_FILE = 'users.json'
+USER_FILES_DIR = 'user_files'
 
-def save_to_cloudinary(data, path):
-    """Сохраняет данные в Cloudinary с повторными попытками"""
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            json_str = json.dumps(data, ensure_ascii=False, indent=2)
-            result = cloudinary.uploader.upload(
-                json_str.encode('utf-8'),
-                public_id=f"database/{path}",
-                resource_type="raw",
-                type="upload"
-            )
-            print(f"✅ Saved to Cloudinary: {path}")
-            return True
-        except Exception as e:
-            print(f"❌ Attempt {attempt + 1} error saving {path}: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2)
-    return False
+# Создаем директории если нет
+os.makedirs(USER_FILES_DIR, exist_ok=True)
 
-def load_from_cloudinary(path):
-    """Загружает данные из Cloudinary с повторными попытками"""
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            url = cloudinary.utils.cloudinary_url(
-                f"database/{path}",
-                resource_type='raw',
-                type='upload'
-            )[0]
-            
-            url_with_cache = f"{url}?t={int(time.time())}"
-            print(f"🔍 Attempt {attempt + 1}: Loading {path}")
-            
-            response = requests.get(url_with_cache, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Successfully loaded: {path}")
-                return data
-            else:
-                print(f"⚠️ Attempt {attempt + 1}: Failed to load {path}, status: {response.status_code}")
-        except Exception as e:
-            print(f"⚠️ Attempt {attempt + 1}: Error loading {path}: {e}")
-        
-        if attempt < max_retries - 1:
-            time.sleep(3)
+def load_users():
+    """Загружает пользователей из локального файла"""
+    try:
+        if os.path.exists(USERS_FILE):
+            with open(USERS_FILE, 'r', encoding='utf-8') as f:
+                users = json.load(f)
+                print(f"👥 Loaded {len(users)} users from local storage")
+                return users
+    except Exception as e:
+        print(f"❌ Error loading users: {e}")
     
-    print(f"❌ Failed to load {path} after {max_retries} attempts")
-    return None
-
-# 🔧 БАЗА ДАННЫХ - НАДЕЖНАЯ СИНХРОНИЗАЦИЯ
-def get_users():
-    """Получает всех пользователей - ВСЕГДА ИЗ CLOUDINARY"""
-    global users_db
-    
-    print("🔄 Loading users from Cloudinary...")
-    cloud_users = load_from_cloudinary("users")
-    
-    if cloud_users is not None:
-        users_db = cloud_users
-        print(f"👥 Successfully loaded {len(users_db)} users: {list(users_db.keys())}")
-    else:
-        # Если файла нет в Cloudinary - создаем только admin
-        if not users_db:
-            users_db = {"admin": {"username": "admin", "password": generate_password_hash("admin123")}}
-            if save_to_cloudinary(users_db, "users"):
-                print("🔧 Created default admin user in Cloudinary")
-            else:
-                print("❌ Failed to create default admin user")
-    
-    return users_db
+    # Если файла нет или ошибка - создаем admin
+    users = {"admin": {"username": "admin", "password": generate_password_hash("admin123")}}
+    save_users(users)
+    return users
 
 def save_users(users):
-    """Сохраняет пользователей в Cloudinary"""
-    global users_db
-    users_db = users
-    
-    print(f"💾 Saving {len(users)} users to Cloudinary...")
-    success = save_to_cloudinary(users, "users")
-    
-    if success:
-        print(f"✅ Users successfully saved to Cloudinary: {list(users.keys())}")
-        # Даем время Cloudinary обработать файл
-        time.sleep(3)
-        
-        # ПРОВЕРЯЕМ что сохранилось
-        print("🔄 Verifying save...")
-        verify_users = load_from_cloudinary("users")
-        if verify_users and users.keys() == verify_users.keys():
-            print("🎉 USERS VERIFIED IN CLOUDINARY!")
-        else:
-            print("⚠️ Users may not have saved properly")
-    else:
-        print("❌ FAILED to save users to Cloudinary")
-    
-    return success
+    """Сохраняет пользователей в локальный файл"""
+    try:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        print(f"✅ Saved {len(users)} users to local storage")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving users: {e}")
+        return False
 
-def get_user_files(user_id):
-    """Получает файлы пользователя"""
-    global user_files_db
+def load_user_files(user_id):
+    """Загружает файлы пользователя из локального файла"""
+    try:
+        file_path = os.path.join(USER_FILES_DIR, f'{user_id}.json')
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                files = json.load(f)
+                print(f"📁 Loaded {len(files)} files for {user_id}")
+                return files
+    except Exception as e:
+        print(f"❌ Error loading files for {user_id}: {e}")
     
-    if user_id not in user_files_db:
-        cloud_files = load_from_cloudinary(f"files_{user_id}")
-        if cloud_files is not None:
-            user_files_db[user_id] = cloud_files
-            print(f"📁 Loaded {len(cloud_files)} files for {user_id}")
-        else:
-            user_files_db[user_id] = []
-            print(f"📁 Created empty file storage for {user_id}")
-    
-    return user_files_db.get(user_id, [])
+    return []
 
 def save_user_files(user_id, files):
-    """Сохраняет файлы пользователя"""
-    global user_files_db
-    user_files_db[user_id] = files
-    
-    print(f"💾 Saving {len(files)} files for {user_id}...")
-    success = save_to_cloudinary(files, f"files_{user_id}")
-    
-    if success:
-        print(f"✅ Files saved for {user_id}")
-        time.sleep(2)
-    else:
-        print(f"❌ Failed to save files for {user_id}")
-    
-    return success
+    """Сохраняет файлы пользователя в локальный файл"""
+    try:
+        file_path = os.path.join(USER_FILES_DIR, f'{user_id}.json')
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(files, f, ensure_ascii=False, indent=2)
+        print(f"✅ Saved {len(files)} files for {user_id}")
+        return True
+    except Exception as e:
+        print(f"❌ Error saving files for {user_id}: {e}")
+        return False
+
+# 🔧 CLOUDINARY БЭКАП (опционально)
+def backup_to_cloudinary(data, path):
+    """Резервное копирование в Cloudinary"""
+    try:
+        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        result = cloudinary.uploader.upload(
+            json_str.encode('utf-8'),
+            public_id=f"backup/{path}",
+            resource_type="raw",
+            type="upload"
+        )
+        print(f"✅ Backed up to Cloudinary: {path}")
+        return True
+    except Exception as e:
+        print(f"⚠️ Cloudinary backup failed for {path}: {e}")
+        return False
 
 # 🔧 ФУНКЦИИ ШИФРОВАНИЯ
 def encrypt_file(file_data):
@@ -194,27 +139,20 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        # ВСЕГДА ЗАГРУЖАЕМ ИЗ CLOUDINARY ПРИ ВХОДЕ
-        users = get_users()
+        # Загружаем пользователей из ЛОКАЛЬНОГО хранилища
+        users = load_users()
         
         print(f"🔍 Login attempt: {username}")
-        print(f"🔍 Available users in Cloudinary: {list(users.keys())}")
+        print(f"🔍 Available users: {list(users.keys())}")
         
         user = users.get(username)
-        if user:
-            print(f"🔍 User found: {username}")
-            if check_password_hash(user['password'], password):
-                session['user_id'] = username
-                session['username'] = username
-                add_flash_message('Login successful!', 'success')
-                return redirect('/dashboard')
-            else:
-                print(f"❌ Invalid password for user: {username}")
+        if user and check_password_hash(user['password'], password):
+            session['user_id'] = username
+            session['username'] = username
+            add_flash_message('Login successful!', 'success')
+            return redirect('/dashboard')
         else:
-            print(f"❌ User not found: {username}")
-            print(f"❌ Available users: {list(users.keys())}")
-        
-        add_flash_message('Invalid username or password', 'error')
+            add_flash_message('Invalid username or password', 'error')
     
     return '''
     <html><body style="margin: 0; font-family: 'Arial', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh;">
@@ -288,8 +226,8 @@ def register():
             add_flash_message('Password must be at least 6 characters', 'error')
             return redirect('/register')
         
-        # ЗАГРУЖАЕМ АКТУАЛЬНЫХ ПОЛЬЗОВАТЕЛЕЙ ИЗ CLOUDINARY
-        users = get_users()
+        # Загружаем текущих пользователей
+        users = load_users()
         
         if username in users:
             add_flash_message('Username already exists', 'error')
@@ -297,32 +235,32 @@ def register():
         
         print(f"🔧 Creating new user: {username}")
         
-        # СОЗДАЕМ НОВОГО ПОЛЬЗОВАТЕЛЯ
+        # Добавляем нового пользователя
         users[username] = {
             'username': username, 
             'password': generate_password_hash(password),
             'created_at': datetime.now().isoformat()
         }
         
-        # СОХРАНЯЕМ В CLOUDINARY
-        print("💾 Saving user to Cloudinary...")
+        # Сохраняем в ЛОКАЛЬНОЕ хранилище
         if save_users(users):
-            print(f"✅ User {username} saved to Cloudinary")
+            print(f"✅ User {username} saved to LOCAL storage")
             
-            # СОЗДАЕМ ХРАНИЛИЩЕ ФАЙЛОВ
-            if save_user_files(username, []):
-                print(f"✅ Created file storage for {username}")
-            else:
-                print(f"⚠️ Could not create file storage for {username}")
+            # Пробуем сделать бэкап в Cloudinary
+            backup_to_cloudinary(users, "users")
             
-            # АВТОМАТИЧЕСКИ ВХОДИМ
+            # Создаем хранилище файлов для пользователя
+            save_user_files(username, [])
+            backup_to_cloudinary([], f"files_{username}")
+            
+            # Автоматически входим
             session['user_id'] = username
             session['username'] = username
             add_flash_message(f'🎉 Registration successful! Welcome {username}', 'success')
             return redirect('/dashboard')
         else:
-            print(f"❌ CRITICAL: FAILED to save user {username} to Cloudinary")
-            add_flash_message('Registration failed - could not save to database. Please try again.', 'error')
+            print(f"❌ FAILED to save user {username}")
+            add_flash_message('Registration failed - please try again', 'error')
             return redirect('/register')
     
     return '''
@@ -383,30 +321,13 @@ def register():
     </body></html>
     '''
 
-# ... остальные маршруты (dashboard, upload, download, delete, debug, logout) остаются БЕЗ ИЗМЕНЕНИЙ
-# (используйте те же самые что были в предыдущем коде)
-
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
-    
-    # УБИРАЕМ ДУБЛИКАТЫ ФАЙЛОВ
-    unique_files = []
-    seen_ids = set()
-    for file in user_files:
-        if file['id'] not in seen_ids:
-            unique_files.append(file)
-            seen_ids.add(file['id'])
-    
-    # Если нашли дубликаты, сохраняем очищенный список
-    if len(unique_files) != len(user_files):
-        print(f"🧹 Removed {len(user_files) - len(unique_files)} duplicate files for {user_id}")
-        save_user_files(user_id, unique_files)
-        user_files = unique_files
+    user_files = load_user_files(user_id)
     
     files_html = ""
     for file in user_files:
@@ -585,6 +506,7 @@ def upload_file():
         
         print(f"🔧 Uploading file: {filename} ({file_size} bytes) for user {user_id}")
         
+        # Шифруем и загружаем в Cloudinary (основное хранилище файлов)
         encrypted_data = encrypt_file(file_data)
         result = cloudinary.uploader.upload(
             encrypted_data,
@@ -595,7 +517,8 @@ def upload_file():
         
         print(f"✅ File uploaded to Cloudinary: {result['secure_url']}")
         
-        user_files = get_user_files(user_id)
+        # Сохраняем метаданные в ЛОКАЛЬНОЕ хранилище
+        user_files = load_user_files(user_id)
         new_file = {
             'id': file_id,
             'name': filename,
@@ -608,6 +531,8 @@ def upload_file():
         
         if save_user_files(user_id, user_files):
             print(f"✅ File metadata saved for user {user_id}")
+            # Бэкап метаданных в Cloudinary
+            backup_to_cloudinary(user_files, f"files_{user_id}")
             add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
         else:
             print(f"❌ Failed to save file metadata for user {user_id}")
@@ -625,7 +550,7 @@ def download_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    user_files = load_user_files(user_id)
     
     file_data = next((f for f in user_files if f['id'] == file_id), None)
     if file_data:
@@ -654,43 +579,31 @@ def delete_file(file_id):
         return redirect('/login')
     
     user_id = session['user_id']
-    user_files = get_user_files(user_id)
+    user_files = load_user_files(user_id)
     
     print(f"🔧 Attempting to delete file {file_id} for user {user_id}")
-    print(f"🔧 User files before deletion: {[f['id'] for f in user_files]}")
     
     file_to_delete = next((f for f in user_files if f['id'] == file_id), None)
     
     if file_to_delete:
         print(f"🔧 Found file to delete: {file_to_delete['name']}")
-        print(f"🔧 File public_id: {file_to_delete.get('public_id')}")
         
         try:
-            # УДАЛЯЕМ ФАЙЛ ИЗ CLOUDINARY
+            # Удаляем файл из Cloudinary
             if file_to_delete.get('public_id'):
-                destroy_result = cloudinary.uploader.destroy(
-                    file_to_delete['public_id'], 
-                    resource_type="raw"
-                )
-                print(f"🔧 Cloudinary destroy result: {destroy_result}")
-                
-                if destroy_result.get('result') == 'ok':
-                    print(f"✅ File deleted from Cloudinary: {file_to_delete['public_id']}")
-                else:
-                    print(f"⚠️ Cloudinary deletion may have failed: {destroy_result}")
-            else:
-                print("⚠️ No public_id found for file")
-                
+                cloudinary.uploader.destroy(file_to_delete['public_id'], resource_type="raw")
+                print(f"✅ File deleted from Cloudinary: {file_to_delete['public_id']}")
         except Exception as e:
             print(f"⚠️ Error deleting from Cloudinary: {e}")
-            # Продолжаем удаление из списка даже если Cloudinary не удалился
     
-        # УДАЛЯЕМ ФАЙЛ ИЗ СПИСКА ПОЛЬЗОВАТЕЛЯ
+        # Удаляем файл из локального списка
         user_files = [f for f in user_files if f['id'] != file_id]
         
-        # СОХРАНЯЕМ ОБНОВЛЕННЫЙ СПИСОК
+        # Сохраняем обновленный список
         if save_user_files(user_id, user_files):
             print(f"✅ File {file_id} removed from user's file list")
+            # Бэкап обновленного списка
+            backup_to_cloudinary(user_files, f"files_{user_id}")
             add_flash_message('File deleted successfully', 'success')
         else:
             print(f"❌ Failed to save updated file list for user {user_id}")
@@ -706,11 +619,11 @@ def debug_info():
     if 'user_id' not in session:
         return redirect('/login')
         
-    users = get_users()
+    users = load_users()
     user_files_count = {}
     
     for username in users.keys():
-        files = get_user_files(username)
+        files = load_user_files(username)
         user_files_count[username] = len(files)
     
     return f'''
@@ -734,6 +647,13 @@ def debug_info():
                     ''' for username, count in user_files_count.items())}
                 </div>
             </div>
+            <div style="background: #e7f3ff; padding: 20px; border-radius: 10px;">
+                <h4>💾 Storage Information</h4>
+                <p><strong>Primary Storage:</strong> Local Files</p>
+                <p><strong>Backup Storage:</strong> Cloudinary</p>
+                <p><strong>File Storage:</strong> Cloudinary</p>
+                <p><strong>Data Persistence:</strong> ✅ Enabled</p>
+            </div>
         </div>
     </body></html>
     '''
@@ -747,19 +667,13 @@ def logout():
 
 if __name__ == '__main__':
     print("🚀 Starting Secure Cloud Storage...")
-    print("✅ Cloudinary database configured!")
+    print("💾 Primary storage: LOCAL FILES")
+    print("☁️ Backup storage: Cloudinary")
+    print("🔒 File storage: Cloudinary (encrypted)")
     
     # Инициализируем базу данных
-    users = get_users()
+    users = load_users()
     print(f"👥 Successfully loaded {len(users)} users: {list(users.keys())}")
-    
-    # Показываем файлы для каждого пользователя
-    for username in users.keys():
-        files = get_user_files(username)
-        print(f"📁 User {username}: {len(files)} files")
-    
-    print("🔧 Data persistence: ✅ ENABLED")
-    print("💾 All data is stored in Cloudinary and will survive server restarts!")
     
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
