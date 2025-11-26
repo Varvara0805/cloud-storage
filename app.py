@@ -11,6 +11,7 @@ import cloudinary.uploader
 import cloudinary.api
 import requests
 import json
+import time
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
@@ -117,12 +118,22 @@ def login():
         password = request.form['password']
         users = get_users()
         
+        print(f"🔍 Attempting login for user: {username}")
+        print(f"🔍 Available users: {list(users.keys())}")
+        
         user = users.get(username)
-        if user and check_password_hash(user['password'], password):
-            session['user_id'] = username
-            session['username'] = username
-            add_flash_message('Login successful!', 'success')
-            return redirect('/dashboard')
+        if user:
+            print(f"🔍 User found: {username}")
+            if check_password_hash(user['password'], password):
+                session['user_id'] = username
+                session['username'] = username
+                add_flash_message('Login successful!', 'success')
+                return redirect('/dashboard')
+            else:
+                print(f"❌ Invalid password for user: {username}")
+        else:
+            print(f"❌ User not found: {username}")
+        
         add_flash_message('Invalid credentials', 'error')
     
     return f'''
@@ -173,11 +184,41 @@ def register():
             add_flash_message('Username already exists', 'error')
             return redirect('/register')
         
-        users[username] = {'username': username, 'password': generate_password_hash(password)}
-        save_users(users)
-        save_user_files(username, [])  # Создаем пустой список файлов
+        print(f"🔧 Creating new user: {username}")
         
-        add_flash_message('🎉 Registration successful! You can now login.', 'success')
+        # Создаем нового пользователя
+        users[username] = {
+            'username': username, 
+            'password': generate_password_hash(password),
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Сохраняем пользователей
+        if save_users(users):
+            print(f"✅ Users saved successfully")
+        else:
+            print(f"❌ Failed to save users")
+            add_flash_message('Registration failed - please try again', 'error')
+            return redirect('/register')
+        
+        # Создаем пустой список файлов для пользователя
+        if save_user_files(username, []):
+            print(f"✅ User files storage created for {username}")
+        else:
+            print(f"❌ Failed to create user files storage")
+        
+        # Даем время для сохранения в Cloudinary
+        time.sleep(2)
+        
+        # Проверяем, что пользователь действительно сохранился
+        verify_users = get_users()
+        if username in verify_users:
+            print(f"✅ User {username} verified in database")
+            add_flash_message(f'🎉 Registration successful! Welcome {username}. You can now login.', 'success')
+        else:
+            print(f"❌ User {username} NOT found in database after registration")
+            add_flash_message('Registration completed but verification failed. Please try logging in.', 'warning')
+        
         return redirect('/login')
     
     return f'''
@@ -427,4 +468,4 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     print("🔧 Data persistence: ENABLED")
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='0.0.0.0', port=port, debug=True)
