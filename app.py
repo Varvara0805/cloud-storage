@@ -285,28 +285,47 @@ def upload_file():
     try:
         user_id = session['user_id']
         filename = secure_filename(file.filename)
+        
+        # Генерируем уникальный ID для файла
         file_id = hashlib.md5(f"{user_id}_{filename}_{datetime.now()}".encode()).hexdigest()
         
+        print(f"🔧 Starting upload: {filename} for user {user_id}")
+        
+        # Читаем данные файла
         file_data = file.read()
         file_size = len(file_data)
         
-        print(f"🔧 Uploading file: {filename} ({file_size} bytes)")
+        print(f"🔧 File read: {file_size} bytes")
+        
+        if file_size == 0:
+            add_flash_message('File is empty', 'error')
+            return redirect('/dashboard')
+        
+        # Проверяем размер файла
+        if file_size > 16 * 1024 * 1024:
+            add_flash_message('File too large (max 16MB)', 'error')
+            return redirect('/dashboard')
         
         # Шифруем файл
+        print("🔧 Encrypting file...")
         encrypted_data = encrypt_file(file_data)
+        print("✅ File encrypted")
         
-        # Загружаем в Cloudinary
+        # Загружаем в Cloudinary - ИСПРАВЛЕННАЯ ЧАСТЬ
+        print("🔧 Uploading to Cloudinary...")
         result = cloudinary.uploader.upload(
-            encrypted_data,
+            io.BytesIO(encrypted_data),  # Важно: передаем как BytesIO
             public_id=f"storage/{user_id}/{file_id}",
             resource_type="raw",
             overwrite=True
         )
         
-        print(f"✅ File uploaded to Cloudinary: {result['secure_url']}")
+        print(f"✅ File uploaded to Cloudinary: {result['public_id']}")
         
-        # Получаем текущие файлы и добавляем новый
+        # Получаем текущие файлы пользователя
         user_files = get_user_files(user_id)
+        
+        # Создаем запись о файле
         new_file = {
             'id': file_id,
             'name': filename,
@@ -315,9 +334,11 @@ def upload_file():
             'public_id': result['public_id'],
             'date': datetime.now().strftime("%Y-%m-%d %H:%M")
         }
+        
+        # Добавляем файл в список
         user_files.append(new_file)
         
-        # Сохраняем обновленный список
+        # Сохраняем обновленный список файлов
         if save_user_files(user_id, user_files):
             print(f"✅ File metadata saved for user {user_id}")
             add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
@@ -325,11 +346,12 @@ def upload_file():
             add_flash_message('❌ Failed to save file metadata', 'error')
         
     except Exception as e:
-        print(f"❌ Upload error: {e}")
+        print(f"❌ Upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()  # Печатаем полную трассировку ошибки
         add_flash_message(f'❌ Upload error: {str(e)}', 'error')
     
     return redirect('/dashboard')
-
 @app.route('/download/<file_id>')
 def download_file(file_id):
     if 'user_id' not in session:
@@ -423,3 +445,4 @@ if __name__ == '__main__':
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
