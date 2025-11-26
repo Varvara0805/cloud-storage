@@ -11,7 +11,6 @@ import cloudinary.uploader
 import cloudinary.api
 import requests
 import json
-import base64
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
@@ -29,18 +28,16 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-# 🔧 УЛУЧШЕННЫЕ ФУНКЦИИ РАБОТЫ С CLOUDINARY
+# 🔧 ВСЕ ДАННЫЕ ХРАНЯТСЯ ТОЛЬКО В CLOUDINARY
 def save_to_cloudinary(data, path):
-    """Сохраняет данные в Cloudinary как текстовый файл"""
+    """Сохраняет данные в Cloudinary"""
     try:
-        json_str = json.dumps(data, ensure_ascii=False)
-        
-        # Сохраняем как raw файл
+        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        # Сохраняем как текстовый файл
         result = cloudinary.uploader.upload(
-            io.BytesIO(json_str.encode('utf-8')),
+            json_str.encode('utf-8'),
             public_id=f"database/{path}",
-            resource_type="raw",
-            overwrite=True
+            resource_type="raw"
         )
         print(f"✅ Saved to Cloudinary: {path}")
         return True
@@ -51,32 +48,22 @@ def save_to_cloudinary(data, path):
 def load_from_cloudinary(path):
     """Загружает данные из Cloudinary"""
     try:
-        # Получаем URL файла
         url = cloudinary.utils.cloudinary_url(f"database/{path}", resource_type='raw')[0]
-        print(f"🔧 Loading from: {url}")
-        
         response = requests.get(url)
         if response.status_code == 200:
-            data = json.loads(response.text)
-            print(f"✅ Loaded from Cloudinary: {path}")
+            data = response.json()
+            print(f"✅ Loaded from Cloudinary: {path} - {len(data) if isinstance(data, list) else 'dict'}")
             return data
-        else:
-            print(f"❌ File not found: {path}, status: {response.status_code}")
-            return None
-            
-    except json.JSONDecodeError as e:
-        print(f"❌ JSON decode error for {path}: {e}")
-        return None
     except Exception as e:
         print(f"❌ Error loading {path}: {e}")
-        return None
+    return None
 
 # 🔧 БАЗА ДАННЫХ В CLOUDINARY
 def get_users():
     """Получает всех пользователей"""
-    users = load_from_cloudinary("users")
-    if users is None:
-        # Создаем admin если нет пользователей
+    users = load_from_cloudinary("users") or {}
+    # Создаем admin если нет пользователей
+    if not users:
         users = {"admin": {"username": "admin", "password": generate_password_hash("admin123")}}
         save_to_cloudinary(users, "users")
         print("🔧 Created default admin user")
@@ -88,9 +75,7 @@ def save_users(users):
 
 def get_user_files(user_id):
     """Получает файлы пользователя"""
-    files = load_from_cloudinary(f"files_{user_id}")
-    if files is None:
-        files = []
+    files = load_from_cloudinary(f"files_{user_id}") or []
     print(f"📁 Loaded {len(files)} files for user {user_id}")
     return files
 
@@ -132,18 +117,12 @@ def login():
         password = request.form['password']
         users = get_users()
         
-        print(f"🔧 Login attempt: {username}")
-        print(f"🔧 Available users: {list(users.keys())}")
-        
         user = users.get(username)
         if user and check_password_hash(user['password'], password):
             session['user_id'] = username
             session['username'] = username
             add_flash_message('Login successful!', 'success')
             return redirect('/dashboard')
-        else:
-            print(f"❌ Login failed for {username}")
-            
         add_flash_message('Invalid credentials', 'error')
     
     return f'''
@@ -169,39 +148,21 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        
-        print(f"🔧 Registration attempt: {username}")
-        
         if len(password) < 6:
-            add_flash_message('Password too short (min 6 characters)', 'error')
+            add_flash_message('Password too short', 'error')
             return redirect('/register')
         
         users = get_users()
         if username in users:
-            add_flash_message('User already exists', 'error')
+            add_flash_message('User exists', 'error')
             return redirect('/register')
         
-        try:
-            # Добавляем нового пользователя
-            users[username] = {
-                'username': username, 
-                'password': generate_password_hash(password)
-            }
-            
-            if save_users(users):
-                # Создаем пустой список файлов для нового пользователя
-                save_user_files(username, [])
-                add_flash_message('Registration successful! Please login.', 'success')
-                print(f"✅ New user created: {username}")
-                return redirect('/login')
-            else:
-                add_flash_message('Registration failed - cannot save user', 'error')
-                return redirect('/register')
-                
-        except Exception as e:
-            print(f"❌ Registration error: {e}")
-            add_flash_message(f'Registration error: {str(e)}', 'error')
-            return redirect('/register')
+        users[username] = {'username': username, 'password': generate_password_hash(password)}
+        save_users(users)
+        save_user_files(username, [])  # Создаем пустой список файлов
+        
+        add_flash_message('Registration successful!', 'success')
+        return redirect('/login')
     
     return f'''
     <html><body style="margin: 50px; font-family: Arial;">
@@ -285,47 +246,25 @@ def upload_file():
     try:
         user_id = session['user_id']
         filename = secure_filename(file.filename)
-        
-        # Генерируем уникальный ID для файла
         file_id = hashlib.md5(f"{user_id}_{filename}_{datetime.now()}".encode()).hexdigest()
         
-        print(f"🔧 Starting upload: {filename} for user {user_id}")
-        
-        # Читаем данные файла
         file_data = file.read()
         file_size = len(file_data)
         
-        print(f"🔧 File read: {file_size} bytes")
+        print(f"🔧 Uploading file: {filename} ({file_size} bytes)")
         
-        if file_size == 0:
-            add_flash_message('File is empty', 'error')
-            return redirect('/dashboard')
-        
-        # Проверяем размер файла
-        if file_size > 16 * 1024 * 1024:
-            add_flash_message('File too large (max 16MB)', 'error')
-            return redirect('/dashboard')
-        
-        # Шифруем файл
-        print("🔧 Encrypting file...")
+        # Шифруем и загружаем в Cloudinary
         encrypted_data = encrypt_file(file_data)
-        print("✅ File encrypted")
-        
-        # Загружаем в Cloudinary - ИСПРАВЛЕННАЯ ЧАСТЬ
-        print("🔧 Uploading to Cloudinary...")
         result = cloudinary.uploader.upload(
-            io.BytesIO(encrypted_data),  # Важно: передаем как BytesIO
-            public_id=f"storage/{user_id}/{file_id}",
-            resource_type="raw",
-            overwrite=True
+            encrypted_data,
+            public_id=f"storage/{user_id}/{file_id}_{filename}",
+            resource_type="raw"
         )
         
-        print(f"✅ File uploaded to Cloudinary: {result['public_id']}")
+        print(f"✅ File uploaded to Cloudinary: {result['secure_url']}")
         
-        # Получаем текущие файлы пользователя
+        # Получаем текущие файлы и добавляем новый
         user_files = get_user_files(user_id)
-        
-        # Создаем запись о файле
         new_file = {
             'id': file_id,
             'name': filename,
@@ -334,24 +273,20 @@ def upload_file():
             'public_id': result['public_id'],
             'date': datetime.now().strftime("%Y-%m-%d %H:%M")
         }
-        
-        # Добавляем файл в список
         user_files.append(new_file)
         
-        # Сохраняем обновленный список файлов
-        if save_user_files(user_id, user_files):
-            print(f"✅ File metadata saved for user {user_id}")
-            add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
-        else:
-            add_flash_message('❌ Failed to save file metadata', 'error')
+        # Сохраняем обновленный список
+        save_user_files(user_id, user_files)
+        
+        print(f"✅ File metadata saved for user {user_id}")
+        add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
         
     except Exception as e:
-        print(f"❌ Upload error: {str(e)}")
-        import traceback
-        traceback.print_exc()  # Печатаем полную трассировку ошибки
+        print(f"❌ Upload error: {e}")
         add_flash_message(f'❌ Upload error: {str(e)}', 'error')
     
     return redirect('/dashboard')
+
 @app.route('/download/<file_id>')
 def download_file(file_id):
     if 'user_id' not in session:
@@ -364,17 +299,9 @@ def download_file(file_id):
     if file_data:
         try:
             response = requests.get(file_data['url'])
-            if response.status_code == 200:
-                decrypted_data = decrypt_file(response.content)
-                return send_file(
-                    io.BytesIO(decrypted_data), 
-                    as_attachment=True, 
-                    download_name=file_data['name']
-                )
-            else:
-                add_flash_message('File not found on server', 'error')
-        except Exception as e:
-            print(f"❌ Download error: {e}")
+            decrypted_data = decrypt_file(response.content)
+            return send_file(io.BytesIO(decrypted_data), as_attachment=True, download_name=file_data['name'])
+        except:
             add_flash_message('Download error', 'error')
     else:
         add_flash_message('File not found', 'error')
@@ -389,21 +316,11 @@ def delete_file(file_id):
     user_id = session['user_id']
     user_files = get_user_files(user_id)
     
-    file_data = next((f for f in user_files if f['id'] == file_id), None)
-    if file_data:
-        try:
-            # Удаляем файл из Cloudinary
-            cloudinary.uploader.destroy(file_data['public_id'], resource_type="raw")
-        except Exception as e:
-            print(f"⚠️ Could not delete from Cloudinary: {e}")
-    
     # Удаляем файл из списка
     user_files = [f for f in user_files if f['id'] != file_id]
-    if save_user_files(user_id, user_files):
-        add_flash_message('File deleted', 'success')
-    else:
-        add_flash_message('Error deleting file', 'error')
+    save_user_files(user_id, user_files)
     
+    add_flash_message('File deleted', 'success')
     return redirect('/dashboard')
 
 @app.route('/logout')
@@ -412,37 +329,8 @@ def logout():
     add_flash_message('Logged out', 'info')
     return redirect('/login')
 
-@app.route('/debug')
-def debug():
-    """Страница для отладки"""
-    users = get_users()
-    files_count = {}
-    for username in users.keys():
-        files = get_user_files(username)
-        files_count[username] = len(files)
-    
-    return f'''
-    <html><body style="margin: 20px;">
-        <h2>Debug Info</h2>
-        <p><strong>Users in database:</strong> {list(users.keys())}</p>
-        <p><strong>Files per user:</strong> {files_count}</p>
-        <p><strong>Session:</strong> {dict(session)}</p>
-        <p><a href="/">Back to main</a></p>
-    </body></html>
-    '''
-
-@app.route('/reset')
-def reset():
-    """Сброс базы данных (для тестирования)"""
-    users = {"admin": {"username": "admin", "password": generate_password_hash("admin123")}}
-    save_to_cloudinary(users, "users")
-    session.clear()
-    add_flash_message('Database reset to default', 'info')
-    return redirect('/')
-
 if __name__ == '__main__':
     print("🚀 Starting Secure Cloud Storage...")
     print("✅ Cloudinary database configured!")
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
-
+    app.run(host='0.0.0.0', port=port, debug=False)
