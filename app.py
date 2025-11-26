@@ -83,7 +83,7 @@ def initialize_databases():
         users_db = cloud_users
         print(f"👥 Loaded {len(users_db)} users: {list(users_db.keys())}")
     else:
-        # СОЗДАЕМ ТЕСТОВЫХ ПОЛЬЗОВАТЕЛЕЙ
+        # СОЗДАЕМ ТЕСТОВЫХ ПОЛЬЗОВАТЕЛЕЙ С ПРАВИЛЬНЫМИ ПАРОЛЯМИ
         users_db = {
             "admin": {
                 "username": "admin", 
@@ -104,8 +104,10 @@ def initialize_databases():
                 "role": "user"
             }
         }
-        save_to_cloudinary(users_db, "users")
-        print("🔧 Created test users: admin, demo, test")
+        if save_to_cloudinary(users_db, "users"):
+            print("🔧 Created test users: admin, demo, test")
+        else:
+            print("❌ Failed to save test users")
     
     # Загружаем файлы для каждого пользователя
     user_files_db = {}
@@ -120,6 +122,7 @@ def initialize_databases():
             save_to_cloudinary([], f"files_{username}")
     
     print("✅ Databases initialized successfully!")
+    return True
 
 def get_users():
     """Получает всех пользователей"""
@@ -132,6 +135,8 @@ def save_users():
     success = save_to_cloudinary(users_db, "users")
     if success:
         print(f"💾 Users saved: {list(users_db.keys())}")
+    else:
+        print("❌ Failed to save users")
     return success
 
 def get_user_files(user_id):
@@ -157,6 +162,8 @@ def save_user_files(user_id):
         success = save_to_cloudinary(files, f"files_{user_id}")
         if success:
             print(f"💾 Files saved for {user_id}: {len(files)} files")
+        else:
+            print(f"❌ Failed to save files for {user_id}")
         return success
     return False
 
@@ -234,15 +241,23 @@ def login():
         users = get_users()
         
         print(f"🔍 Login attempt: {username}")
+        print(f"🔍 Available users: {list(users.keys())}")
         
         user = users.get(username)
-        if user and check_password_hash(user['password'], password):
-            session['user_id'] = username
-            session['username'] = username
-            add_flash_message('Login successful!', 'success')
-            return redirect('/dashboard')
+        if user:
+            print(f"🔍 User found: {username}")
+            print(f"🔍 Stored password hash: {user['password'][:50]}...")
+            print(f"🔍 Password check: {check_password_hash(user['password'], password)}")
+            
+            if check_password_hash(user['password'], password):
+                session['user_id'] = username
+                session['username'] = username
+                add_flash_message('Login successful!', 'success')
+                return redirect('/dashboard')
+            else:
+                add_flash_message('Invalid password', 'error')
         else:
-            add_flash_message('Invalid username or password', 'error')
+            add_flash_message('User not found', 'error')
     
     return '''
     <!DOCTYPE html>
@@ -550,7 +565,7 @@ def register():
         
         print(f"🔧 Creating new user: {username}")
         
-        # СОЗДАЕМ НОВОГО ПОЛЬЗОВАТЕЛЯ
+        # СОЗДАЕМ НОВОГО ПОЛЬЗОВАТЕЛЯ И СРАЗУ СОХРАНЯЕМ В ГЛОБАЛЬНУЮ БАЗУ
         users_db[username] = {
             'username': username, 
             'password': generate_password_hash(password),
@@ -558,7 +573,7 @@ def register():
             'role': 'user'
         }
         
-        # СОХРАНЯЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ
+        # СОХРАНЯЕМ ВСЕХ ПОЛЬЗОВАТЕЛЕЙ В CLOUDINARY
         if save_users():
             print(f"✅ User {username} saved successfully")
             
@@ -573,6 +588,9 @@ def register():
             add_flash_message(f'🎉 Registration successful! Welcome {username}', 'success')
             return redirect('/dashboard')
         else:
+            # Если не удалось сохранить, удаляем пользователя из памяти
+            if username in users_db:
+                del users_db[username]
             add_flash_message('Registration failed - please try again', 'error')
             return redirect('/register')
     
