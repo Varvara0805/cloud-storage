@@ -122,20 +122,20 @@ def add_user(username, password_hash):
         'created_at': str(datetime.now())
     }
     app_data['users'].append(new_user)
-    save_to_cloudinary(app_data)  # Сохраняем в Cloudinary
+    save_to_cloudinary(app_data)
     return new_user
 
 def add_file(file_data):
     new_id = max([f['id'] for f in app_data['files']], default=0) + 1
     file_data['id'] = new_id
     app_data['files'].append(file_data)
-    save_to_cloudinary(app_data)  # Сохраняем в Cloudinary
+    save_to_cloudinary(app_data)
     return file_data
 
 def delete_file_record(file_id, user_id):
     app_data['files'] = [f for f in app_data['files']
                         if not (f['file_id'] == file_id and f['user_id'] == user_id)]
-    save_to_cloudinary(app_data)  # Сохраняем в Cloudinary
+    save_to_cloudinary(app_data)
 
 def get_file_by_id(file_id, user_id):
     for file in app_data['files']:
@@ -262,18 +262,38 @@ def dashboard():
   
     files_html = ""
     for file in files_list:
-        size_kb = round(file["file_size"]/1024, 1) if file["file_size"] else 0
-        upload_date = datetime.strptime(file["uploaded_at"], '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M') if file["uploaded_at"] else 'Unknown'
-      
+        # Безопасное получение размера файла
+        size_kb = 0
+        if file.get("file_size"):
+            try:
+                size_kb = round(float(file["file_size"])/1024, 1)
+            except:
+                size_kb = 0
+       
+        # Безопасное получение даты
+        upload_date = 'Unknown'
+        if file.get("uploaded_at"):
+            try:
+                upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M')
+            except:
+                try:
+                    upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d').strftime('%d.%m.%Y')
+                except:
+                    upload_date = str(file["uploaded_at"])[:16]
+       
+        # Безопасное получение имени файла
+        filename = file.get("original_filename", "Unknown file")
+        file_id = file.get("file_id", "")
+       
         files_html += f'''
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
             <div>
-                <strong>📁 {file["original_filename"]}</strong><br>
+                <strong>📁 {filename}</strong><br>
                 <small>Size: {size_kb} KB | Uploaded: {upload_date}</small>
             </div>
             <div>
-                <a href="/download/{file["file_id"]}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
-                <a href="/delete/{file["file_id"]}" onclick="return confirm('Are you sure you want to delete {file["original_filename"]}?')" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
+                <a href="/download/{file_id}" style="padding: 8px 15px; background: #007bff; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">⬇️ Download</a>
+                <a href="/delete/{file_id}" onclick="return confirm('Are you sure you want to delete {filename}?')" style="padding: 8px 15px; background: #dc3545; color: white; border-radius: 5px; text-decoration: none; margin: 5px;">🗑️ Delete</a>
             </div>
         </div>
         '''
@@ -358,7 +378,7 @@ def upload_file():
             'uploaded_at': str(datetime.now())
         }
       
-        add_file(file_record)  # Сохраняет в Cloudinary
+        add_file(file_record)
       
         add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
       
@@ -409,7 +429,7 @@ def delete_file(file_id):
                 cloudinary.uploader.destroy(file['cloudinary_public_id'], resource_type="raw")
           
             # Удаляем запись из базы данных
-            delete_file_record(file_id, user_id)  # Сохраняет изменения в Cloudinary
+            delete_file_record(file_id, user_id)
           
             add_flash_message(f'✅ File "{file["original_filename"]}" deleted successfully!', 'success')
         except Exception as e:
@@ -427,19 +447,43 @@ def profile():
     user_id = session['user_id']
     user = get_user_by_username(user_id)
   
+    if not user:
+        add_flash_message('User not found', 'error')
+        return redirect('/logout')
+   
     # Получаем статистику пользователя
     user_files = get_user_files(user_id)
-    total_size = sum(f['file_size'] for f in user_files)
+    total_size = sum(f.get('file_size', 0) for f in user_files)
     total_files = len(user_files)
   
     total_size_mb = round(total_size / (1024 * 1024), 2) if total_size else 0
   
     # Форматируем даты
-    join_date = datetime.strptime(user['created_at'], '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y') if user['created_at'] else 'Unknown'
+    join_date = 'Unknown'
+    if user.get('created_at'):
+        try:
+            join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y')
+        except:
+            try:
+                join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d').strftime('%d.%m.%Y')
+            except:
+                join_date = str(user['created_at'])[:10]
   
     first_upload = 'No uploads yet'
     if user_files:
-        upload_dates = [datetime.strptime(f['uploaded_at'], '%Y-%m-%d %H:%M:%S') for f in user_files if f['uploaded_at']]
+        upload_dates = []
+        for f in user_files:
+            if f.get('uploaded_at'):
+                try:
+                    date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S')
+                    upload_dates.append(date_obj)
+                except:
+                    try:
+                        date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d')
+                        upload_dates.append(date_obj)
+                    except:
+                        pass
+       
         if upload_dates:
             first_upload = min(upload_dates).strftime('%d.%m.%Y')
   
