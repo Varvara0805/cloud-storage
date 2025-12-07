@@ -509,7 +509,6 @@ def dashboard():
    
     files_html = ""
     for file in files_list:
-        # Безопасное получение данных
         size_kb = 0
         if file.get("file_size"):
             try:
@@ -530,26 +529,53 @@ def dashboard():
         filename = file.get("original_filename", "Unknown file")
         file_id = file.get("file_id", "")
        
+        # Определяем иконку по расширению файла
+        file_ext = filename.split('.')[-1].lower() if '.' in filename else ''
+        file_icon = "fa-file"
+        file_color = "#6366f1"
+       
+        if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg']:
+            file_icon = "fa-file-image"
+            file_color = "#ec4899"
+        elif file_ext in ['pdf']:
+            file_icon = "fa-file-pdf"
+            file_color = "#ef4444"
+        elif file_ext in ['doc', 'docx']:
+            file_icon = "fa-file-word"
+            file_color = "#3b82f6"
+        elif file_ext in ['xls', 'xlsx']:
+            file_icon = "fa-file-excel"
+            file_color = "#10b981"
+        elif file_ext in ['zip', 'rar', '7z', 'tar', 'gz']:
+            file_icon = "fa-file-archive"
+            file_color = "#f59e0b"
+        elif file_ext in ['mp3', 'wav', 'flac']:
+            file_icon = "fa-file-audio"
+            file_color = "#8b5cf6"
+        elif file_ext in ['mp4', 'avi', 'mkv', 'mov']:
+            file_icon = "fa-file-video"
+            file_color = "#8b5cf6"
+       
         files_html += f'''
-        <div style="background: white; border: 1px solid #e1e5e9; border-radius: 12px; padding: 20px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; transition: all 0.3s;">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="background: linear-gradient(135deg, #667eea, #764ba2); width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white;">
-                    📁
-                </div>
-                <div>
-                    <div style="font-weight: 600; color: #333; margin-bottom: 5px;">{filename}</div>
-                    <div style="font-size: 13px; color: #666;">
-                        <span style="margin-right: 15px;">📦 {size_kb} KB</span>
-                        <span>📅 {upload_date}</span>
-                    </div>
+        <div class="file-card">
+            <div class="file-icon" style="background: linear-gradient(135deg, {file_color}20, {file_color}40); border-color: {file_color}60;">
+                <i class="fas {file_icon}" style="color: {file_color};"></i>
+            </div>
+            <div class="file-info">
+                <div class="file-name">{filename}</div>
+                <div class="file-meta">
+                    <span class="file-size"><i class="fas fa-weight-hanging"></i> {size_kb} KB</span>
+                    <span class="file-date"><i class="far fa-clock"></i> {upload_date}</span>
                 </div>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <a href="/download/{file_id}" style="background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
-                    ⬇️ Download
+            <div class="file-actions">
+                <a href="/download/{file_id}" class="btn-action btn-download">
+                    <i class="fas fa-download"></i>
+                    <span>Download</span>
                 </a>
-                <a href="/delete/{file_id}" onclick="return confirm('Delete {filename}?')" style="background: #f56565; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
-                    🗑️ Delete
+                <a href="/delete/{file_id}" onclick="return confirm('Delete {filename}?')" class="btn-action btn-delete">
+                    <i class="fas fa-trash"></i>
+                    <span>Delete</span>
                 </a>
             </div>
         </div>
@@ -557,571 +583,861 @@ def dashboard():
    
     if not files_html:
         files_html = '''
-        <div style="text-align: center; padding: 60px 20px; color: #666;">
-            <div style="font-size: 60px; margin-bottom: 20px;">📁</div>
-            <h3 style="font-size: 24px; font-weight: 500; margin-bottom: 10px;">No files yet</h3>
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <h3>Your storage is empty</h3>
             <p>Upload your first file to get started</p>
         </div>
         '''
    
     return f'''
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Dashboard | CloudSecure</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                background: #f5f7fa;
-                color: #333;
+            :root {{
+                --primary: #6366f1;
+                --primary-dark: #4f46e5;
+                --secondary: #8b5cf6;
+                --accent: #ec4899;
+                --light: #f8fafc;
+                --dark: #1e293b;
+                --success: #10b981;
+                --error: #ef4444;
+                --warning: #f59e0b;
+                --gray: #64748b;
+                --gray-light: #e2e8f0;
+                --radius-lg: 24px;
+                --radius-md: 16px;
+                --radius-sm: 12px;
+                --shadow-sm: 0 4px 20px rgba(0,0,0,0.08);
+                --shadow-md: 0 10px 40px rgba(0,0,0,0.12);
             }}
+           
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+           
+            html, body {{
+                height: 100%;
+                width: 100%;
+                overflow-x: hidden;
+            }}
+           
+            body {{
+                font-family: 'Poppins', sans-serif;
+                background: #f1f5f9;
+                color: var(--dark);
+                min-height: 100vh;
+                overflow-y: auto;
+                position: relative;
+            }}
+           
+            /* Navigation */
             .navbar {{
                 background: white;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
                 padding: 0 40px;
-                height: 70px;
+                height: 80px;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
                 position: sticky;
                 top: 0;
                 z-index: 1000;
+                backdrop-filter: blur(10px);
+                background: rgba(255, 255, 255, 0.95);
             }}
+           
             .logo {{
                 display: flex;
                 align-items: center;
-                gap: 10px;
-                font-size: 24px;
-                font-weight: 600;
-                color: #667eea;
+                gap: 15px;
+                font-size: 26px;
+                font-weight: 700;
+                color: var(--primary);
                 text-decoration: none;
+                transition: transform 0.3s ease;
             }}
+           
+            .logo:hover {{
+                transform: translateY(-2px);
+            }}
+           
+            .logo-icon {{
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                width: 50px;
+                height: 50px;
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 24px;
+            }}
+           
             .user-menu {{
                 display: flex;
                 align-items: center;
-                gap: 15px;
+                gap: 25px;
             }}
+           
             .user-info {{
                 display: flex;
                 align-items: center;
-                gap: 10px;
+                gap: 15px;
+                padding: 10px 20px;
+                background: var(--light);
+                border-radius: var(--radius-md);
+                border: 2px solid var(--gray-light);
             }}
+           
             .avatar {{
-                width: 40px;
-                height: 40px;
-                background: linear-gradient(135deg, #667eea, #764ba2);
+                width: 45px;
+                height: 45px;
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 color: white;
                 font-weight: 600;
+                font-size: 18px;
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
             }}
+           
+            .username {{
+                font-weight: 500;
+                color: var(--dark);
+            }}
+           
+            .nav-links {{
+                display: flex;
+                gap: 12px;
+            }}
+           
             .nav-btn {{
-                padding: 10px 20px;
-                border-radius: 8px;
+                padding: 12px 24px;
+                border-radius: var(--radius-md);
                 text-decoration: none;
                 font-weight: 500;
-                font-size: 14px;
+                font-size: 15px;
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                border: 2px solid transparent;
             }}
+           
             .nav-btn.primary {{
-                background: linear-gradient(135deg, #667eea, #764ba2);
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
                 color: white;
+                box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
             }}
+           
+            .nav-btn.primary:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+            }}
+           
             .nav-btn.secondary {{
-                background: #f8f9fa;
-                color: #666;
-                border: 1px solid #e1e5e9;
+                background: white;
+                color: var(--gray);
+                border-color: var(--gray-light);
             }}
+           
+            .nav-btn.secondary:hover {{
+                background: var(--light);
+                transform: translateY(-3px);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }}
+           
+            /* Main Content */
+            .main-container {{
+                min-height: calc(100vh - 80px);
+                display: flex;
+                flex-direction: column;
+            }}
+           
             .container {{
                 max-width: 1200px;
                 margin: 40px auto;
                 padding: 0 20px;
+                flex: 1;
+                width: 100%;
             }}
+           
+            /* Upload Section */
             .upload-section {{
                 background: white;
-                border-radius: 16px;
-                padding: 30px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                border-radius: var(--radius-lg);
+                padding: 40px;
+                box-shadow: var(--shadow-sm);
                 margin-bottom: 30px;
+                border: 2px dashed var(--gray-light);
+                transition: all 0.3s ease;
             }}
+           
+            .upload-section:hover {{
+                border-color: var(--primary);
+                box-shadow: var(--shadow-md);
+            }}
+           
             .section-title {{
-                font-size: 24px;
+                font-size: 28px;
                 font-weight: 600;
-                margin-bottom: 20px;
-                color: #333;
+                margin-bottom: 25px;
+                color: var(--dark);
+                display: flex;
+                align-items: center;
+                gap: 15px;
             }}
+           
             .upload-form {{
                 display: flex;
-                gap: 15px;
+                gap: 20px;
                 align-items: center;
-                margin-bottom: 20px;
+                margin-bottom: 25px;
             }}
+           
             .file-input {{
                 flex: 1;
-                padding: 15px;
-                border: 2px dashed #cbd5e0;
-                border-radius: 10px;
+                padding: 20px;
+                border: 2px dashed var(--gray-light);
+                border-radius: var(--radius-md);
                 font-size: 16px;
-                background: #f8f9fa;
+                font-family: 'Poppins', sans-serif;
+                background: var(--light);
+                transition: all 0.3s ease;
+                cursor: pointer;
+                min-width: 0;
             }}
+           
+            .file-input:hover {{
+                border-color: var(--primary);
+                background: white;
+            }}
+           
             .btn-upload {{
-                padding: 15px 30px;
-                background: linear-gradient(135deg, #48bb78, #38a169);
+                padding: 20px 40px;
+                background: linear-gradient(135deg, var(--success), #059669);
                 color: white;
                 border: none;
-                border-radius: 10px;
-                font-size: 16px;
+                border-radius: var(--radius-md);
+                font-size: 17px;
                 font-weight: 600;
                 cursor: pointer;
-            }}
-            .upload-info {{
+                transition: all 0.3s ease;
                 display: flex;
+                align-items: center;
+                gap: 12px;
+                box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+                white-space: nowrap;
+            }}
+           
+            .btn-upload:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+            }}
+           
+            .upload-features {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
                 gap: 20px;
-                color: #666;
+                margin-top: 30px;
+            }}
+           
+            .feature {{
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                padding: 20px;
+                background: var(--light);
+                border-radius: var(--radius-md);
+                transition: all 0.3s ease;
+            }}
+           
+            .feature:hover {{
+                background: white;
+                transform: translateY(-3px);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }}
+           
+            .feature-icon {{
+                width: 50px;
+                height: 50px;
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 22px;
+            }}
+           
+            .feature-text {{
+                flex: 1;
+            }}
+           
+            .feature-text strong {{
+                display: block;
+                margin-bottom: 5px;
+                color: var(--dark);
+            }}
+           
+            .feature-text span {{
+                color: var(--gray);
                 font-size: 14px;
             }}
+           
+            /* Files Section */
             .files-section {{
                 background: white;
-                border-radius: 16px;
-                padding: 30px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                border-radius: var(--radius-lg);
+                padding: 40px;
+                box-shadow: var(--shadow-sm);
+                margin-bottom: 40px;
+                min-height: 300px;
             }}
+           
             .section-header {{
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 25px;
+                margin-bottom: 30px;
+                flex-wrap: wrap;
+                gap: 15px;
             }}
+           
             .files-count {{
-                background: #edf2f7;
-                color: #667eea;
-                padding: 8px 16px;
-                border-radius: 20px;
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                color: white;
+                padding: 10px 24px;
+                border-radius: 30px;
                 font-weight: 600;
-                font-size: 14px;
-            }}
-            @media (max-width: 768px) {{
-                .navbar {{
-                    padding: 0 20px;
-                }}
-                .upload-form {{
-                    flex-direction: column;
-                }}
-                .file-input, .btn-upload {{
-                    width: 100%;
-                }}
-            }}
-        </style>
-    </head>
-    <body>
-        <nav class="navbar">
-            <a href="/dashboard" class="logo">
-                <span>☁️</span>
-                <span>CloudSecure</span>
-            </a>
-            <div class="user-menu">
-                <div class="user-info">
-                    <div class="avatar">
-                        {session["username"][0].upper()}
-                    </div>
-                    <span>Hello, {session["username"]}</span>
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <a href="/profile" class="nav-btn primary">👤 Profile</a>
-                    <a href="/logout" class="nav-btn secondary">🚪 Logout</a>
-                </div>
-            </div>
-        </nav>
-       
-        <div class="container">
-            {get_flash_html()}
-           
-            <div class="upload-section">
-                <h2 class="section-title">📤 Upload File</h2>
-                <form method="POST" action="/upload" enctype="multipart/form-data" class="upload-form">
-                    <input type="file" name="file" required class="file-input">
-                    <button type="submit" class="btn-upload">📎 Upload File</button>
-                </form>
-                <div class="upload-info">
-                    <div>📦 Max size: 16MB</div>
-                    <div>🔒 End-to-end encrypted</div>
-                    <div>💾 Data persists after restart</div>
-                </div>
-            </div>
-           
-            <div class="files-section">
-                <div class="section-header">
-                    <h2 class="section-title">📁 Your Files</h2>
-                    <div class="files-count">{len(files_list)} files</div>
-                </div>
-                {files_html}
-            </div>
-        </div>
-    </body>
-    </html>
-    '''
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'user_id' not in session:
-        return redirect('/login')
-   
-    if 'file' not in request.files:
-        add_flash_message('No file selected', 'error')
-        return redirect('/dashboard')
-   
-    file = request.files['file']
-    if file.filename == '':
-        add_flash_message('No file selected', 'error')
-        return redirect('/dashboard')
-   
-    try:
-        user_id = session['user_id']
-        filename = secure_filename(file.filename)
-        file_id = hashlib.md5(f"{user_id}_{filename}_{datetime.now()}".encode()).hexdigest()
-       
-        file_data = file.read()
-        file_size = len(file_data)
-       
-        if file_size > 16 * 1024 * 1024:
-            add_flash_message('File too large (max 16MB)', 'error')
-            return redirect('/dashboard')
-       
-        encrypted_data = encrypt_file(file_data)
-        result = cloudinary.uploader.upload(
-            encrypted_data,
-            public_id=f"storage/{user_id}/{file_id}_{filename}",
-            resource_type="raw"
-        )
-       
-        file_record = {
-            'file_id': file_id,
-            'filename': f"{file_id}_{filename}",
-            'original_filename': filename,
-            'user_id': user_id,
-            'file_size': file_size,
-            'cloudinary_url': result['secure_url'],
-            'cloudinary_public_id': result['public_id'],
-            'uploaded_at': str(datetime.now())
-        }
-       
-        add_file(file_record)
-        add_flash_message(f'File "{filename}" uploaded successfully!', 'success')
-       
-    except Exception as e:
-        add_flash_message(f'Upload error: {str(e)}', 'error')
-   
-    return redirect('/dashboard')
-
-@app.route('/download/<file_id>')
-def download_file(file_id):
-    if 'user_id' not in session:
-        return redirect('/login')
-   
-    user_id = session['user_id']
-    file = get_file_by_id(file_id, user_id)
-   
-    if file:
-        try:
-            response = requests.get(file['cloudinary_url'])
-            if response.status_code == 200:
-                decrypted_data = decrypt_file(response.content)
-                return send_file(
-                    io.BytesIO(decrypted_data),
-                    as_attachment=True,
-                    download_name=file['original_filename']
-                )
-            else:
-                add_flash_message('File not found on cloud storage', 'error')
-        except Exception as e:
-            add_flash_message(f'Download error: {str(e)}', 'error')
-    else:
-        add_flash_message('File not found', 'error')
-   
-    return redirect('/dashboard')
-
-@app.route('/delete/<file_id>')
-def delete_file(file_id):
-    if 'user_id' not in session:
-        return redirect('/login')
-   
-    user_id = session['user_id']
-    file = get_file_by_id(file_id, user_id)
-   
-    if file:
-        try:
-            if file['cloudinary_public_id']:
-                cloudinary.uploader.destroy(file['cloudinary_public_id'], resource_type="raw")
-           
-            delete_file_record(file_id, user_id)
-            add_flash_message(f'File "{file["original_filename"]}" deleted!', 'success')
-        except Exception as e:
-            add_flash_message(f'Delete error: {str(e)}', 'error')
-    else:
-        add_flash_message('File not found', 'error')
-   
-    return redirect('/dashboard')
-
-@app.route('/profile')
-def profile():
-    if 'user_id' not in session:
-        return redirect('/login')
-   
-    user_id = session['user_id']
-    user = get_user_by_username(user_id)
-   
-    if not user:
-        add_flash_message('User not found', 'error')
-        return redirect('/logout')
-   
-    user_files = get_user_files(user_id)
-    total_size = sum(f.get('file_size', 0) for f in user_files)
-    total_files = len(user_files)
-   
-    total_size_mb = round(total_size / (1024 * 1024), 2) if total_size else 0
-   
-    join_date = 'Unknown'
-    if user.get('created_at'):
-        try:
-            join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d %H:%M:%S').strftime('%B %d, %Y')
-        except:
-            try:
-                join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d').strftime('%B %d, %Y')
-            except:
-                join_date = str(user['created_at'])[:10]
-   
-    first_upload = 'No uploads yet'
-    if user_files:
-        upload_dates = []
-        for f in user_files:
-            if f.get('uploaded_at'):
-                try:
-                    date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S')
-                    upload_dates.append(date_obj)
-                except:
-                    try:
-                        date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d')
-                        upload_dates.append(date_obj)
-                    except:
-                        pass
-       
-        if upload_dates:
-            first_upload = min(upload_dates).strftime('%B %d, %Y')
-   
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Profile | CloudSecure</title>
-        <style>
-            body {{
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                margin: 0;
-                background: #f5f7fa;
-            }}
-            .navbar {{
-                background: white;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                padding: 0 40px;
-                height: 70px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-            }}
-            .logo {{
+                font-size: 15px;
                 display: flex;
                 align-items: center;
                 gap: 10px;
-                font-size: 24px;
-                font-weight: 600;
-                color: #667eea;
-                text-decoration: none;
+                box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+                white-space: nowrap;
             }}
-            .nav-btn {{
-                padding: 10px 20px;
-                border-radius: 8px;
-                text-decoration: none;
-                font-weight: 500;
-                font-size: 14px;
+           
+            /* File Cards */
+            .files-container {{
+                max-height: 600px;
+                overflow-y: auto;
+                padding-right: 10px;
             }}
-            .nav-btn.primary {{
-                background: linear-gradient(135deg, #667eea, #764ba2);
-                color: white;
+           
+            .files-container::-webkit-scrollbar {{
+                width: 8px;
             }}
-            .nav-btn.secondary {{
-                background: #f8f9fa;
-                color: #666;
-                border: 1px solid #e1e5e9;
+           
+            .files-container::-webkit-scrollbar-track {{
+                background: var(--light);
+                border-radius: 4px;
             }}
-            .container {{
-                max-width: 1000px;
-                margin: 40px auto;
-                padding: 0 20px;
+           
+            .files-container::-webkit-scrollbar-thumb {{
+                background: var(--primary);
+                border-radius: 4px;
             }}
-            .profile-card {{
+           
+            .files-container::-webkit-scrollbar-thumb:hover {{
+                background: var(--primary-dark);
+            }}
+           
+            .file-card {{
+                display: flex;
+                align-items: center;
+                padding: 25px;
                 background: white;
-                border-radius: 20px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                border: 2px solid var(--gray-light);
+                border-radius: var(--radius-md);
+                margin-bottom: 20px;
+                transition: all 0.3s ease;
+                position: relative;
                 overflow: hidden;
+                width: 100%;
             }}
-            .profile-header {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                padding: 60px 40px;
-                text-align: center;
-                color: white;
+           
+            .file-card:hover {{
+                transform: translateY(-5px);
+                border-color: var(--primary);
+                box-shadow: var(--shadow-md);
             }}
-            .avatar-large {{
-                width: 120px;
-                height: 120px;
-                background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
-                border-radius: 50%;
+           
+            .file-card::before {{
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                width: 4px;
+                background: linear-gradient(to bottom, var(--primary), var(--secondary));
+            }}
+           
+            .file-icon {{
+                width: 60px;
+                height: 60px;
+                border-radius: 16px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 48px;
-                font-weight: 700;
-                margin: 0 auto 20px;
-                border: 5px solid white;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                margin-right: 25px;
+                font-size: 28px;
+                border: 2px solid;
+                flex-shrink: 0;
             }}
-            .profile-header h1 {{
-                font-size: 36px;
-                font-weight: 700;
+           
+            .file-info {{
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+            }}
+           
+            .file-name {{
+                font-weight: 600;
+                color: var(--dark);
                 margin-bottom: 10px;
+                font-size: 18px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }}
-            .profile-header p {{
-                opacity: 0.9;
-                font-size: 16px;
+           
+            .file-meta {{
+                display: flex;
+                gap: 25px;
+                color: var(--gray);
+                font-size: 14px;
+                flex-wrap: wrap;
             }}
-            .profile-stats {{
+           
+            .file-meta span {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                white-space: nowrap;
+            }}
+           
+            .file-actions {{
+                display: flex;
+                gap: 15px;
+                flex-shrink: 0;
+            }}
+           
+            .btn-action {{
+                padding: 12px 24px;
+                border-radius: var(--radius-sm);
+                text-decoration: none;
+                font-weight: 500;
+                font-size: 15px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+                white-space: nowrap;
+            }}
+           
+            .btn-download {{
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                color: white;
+                box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            }}
+           
+            .btn-download:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+            }}
+           
+            .btn-delete {{
+                background: white;
+                color: var(--error);
+                border-color: var(--error);
+            }}
+           
+            .btn-delete:hover {{
+                background: var(--error);
+                color: white;
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+            }}
+           
+            /* Empty State */
+            .empty-state {{
+                text-align: center;
+                padding: 80px 20px;
+                min-height: 300px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+            }}
+           
+            .empty-icon {{
+                font-size: 80px;
+                margin-bottom: 30px;
+                color: var(--primary);
+                opacity: 0.5;
+            }}
+           
+            .empty-state h3 {{
+                font-size: 28px;
+                font-weight: 600;
+                margin-bottom: 15px;
+                color: var(--dark);
+            }}
+           
+            .empty-state p {{
+                color: var(--gray);
+                font-size: 18px;
+                max-width: 400px;
+                margin: 0 auto;
+            }}
+           
+            /* Alerts */
+            .alert {{
+                padding: 20px;
+                border-radius: var(--radius-md);
+                margin-bottom: 30px;
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                animation: slideIn 0.5s ease;
+            }}
+           
+            .alert-error {{
+                background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+                border-left: 4px solid var(--error);
+                color: var(--error);
+            }}
+           
+            .alert-success {{
+                background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+                border-left: 4px solid var(--success);
+                color: var(--success);
+            }}
+           
+            .alert-info {{
+                background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+                border-left: 4px solid #3b82f6;
+                color: #3b82f6;
+            }}
+           
+            .alert i {{
+                font-size: 22px;
+            }}
+           
+            /* Footer */
+            .footer {{
+                background: white;
+                padding: 30px 40px;
+                border-top: 1px solid var(--gray-light);
+                margin-top: auto;
+            }}
+           
+            .footer-content {{
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 20px;
+            }}
+           
+            .footer-logo {{
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: var(--primary);
+                font-weight: 600;
+                font-size: 18px;
+            }}
+           
+            .footer-links {{
                 display: flex;
                 gap: 20px;
-                padding: 40px;
             }}
-            .stat-card {{
-                flex: 1;
-                background: #f7fafc;
-                border-radius: 16px;
-                padding: 30px;
-                text-align: center;
-            }}
-            .stat-card.blue {{
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-            }}
-            .stat-card.green {{
-                background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-                color: white;
-            }}
-            .stat-value {{
-                font-size: 48px;
-                font-weight: 700;
-                margin-bottom: 10px;
-            }}
-            .stat-label {{
-                font-size: 16px;
-                opacity: 0.9;
-            }}
-            .profile-info {{
-                padding: 40px;
-                background: #f7fafc;
-            }}
-            .info-grid {{
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 20px;
-                margin-bottom: 30px;
-            }}
-            .info-item {{
-                background: white;
-                padding: 20px;
-                border-radius: 12px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            }}
-            .info-item h3 {{
-                color: #4a5568;
+           
+            .footer-links a {{
+                color: var(--gray);
+                text-decoration: none;
                 font-size: 14px;
-                margin-bottom: 8px;
+                transition: color 0.3s ease;
             }}
-            .info-item p {{
-                font-size: 18px;
-                font-weight: 600;
-                color: #2d3748;
+           
+            .footer-links a:hover {{
+                color: var(--primary);
             }}
-            @media (max-width: 768px) {{
-                .profile-stats {{
+           
+            /* Responsive */
+            @media (max-width: 1200px) {{
+                .container {{
+                    padding: 0 30px;
+                }}
+            }}
+           
+            @media (max-width: 1024px) {{
+                .file-card {{
                     flex-direction: column;
+                    text-align: center;
+                    gap: 20px;
+                    padding: 20px;
                 }}
-                .info-grid {{
-                    grid-template-columns: 1fr;
+               
+                .file-icon {{
+                    margin-right: 0;
+                    margin-bottom: 15px;
                 }}
+               
+                .file-info {{
+                    margin-bottom: 15px;
+                    width: 100%;
+                }}
+               
+                .file-meta {{
+                    justify-content: center;
+                    gap: 15px;
+                }}
+               
+                .file-actions {{
+                    width: 100%;
+                    justify-content: center;
+                }}
+            }}
+           
+            @media (max-width: 768px) {{
                 .navbar {{
                     padding: 0 20px;
+                    height: auto;
+                    padding: 15px;
+                    flex-direction: column;
+                    gap: 15px;
                 }}
+               
+                .user-menu {{
+                    width: 100%;
+                    justify-content: space-between;
+                }}
+               
+                .nav-links {{
+                    width: 100%;
+                    justify-content: center;
+                }}
+               
+                .upload-form {{
+                    flex-direction: column;
+                }}
+               
+                .file-input, .btn-upload {{
+                    width: 100%;
+                }}
+               
+                .upload-features {{
+                    grid-template-columns: 1fr;
+                }}
+               
+                .feature {{
+                    flex-direction: column;
+                    text-align: center;
+                }}
+               
+                .feature-icon {{
+                    margin-bottom: 15px;
+                }}
+               
+                .section-header {{
+                    flex-direction: column;
+                    align-items: flex-start;
+                }}
+               
+                .files-count {{
+                    align-self: flex-start;
+                }}
+               
+                .footer-content {{
+                    flex-direction: column;
+                    text-align: center;
+                }}
+            }}
+           
+            @media (max-width: 480px) {{
+                .container {{
+                    padding: 0 15px;
+                }}
+               
+                .upload-section, .files-section {{
+                    padding: 25px 20px;
+                }}
+               
+                .section-title {{
+                    font-size: 24px;
+                }}
+               
+                .file-card {{
+                    padding: 15px;
+                }}
+               
+                .file-actions {{
+                    flex-direction: column;
+                    width: 100%;
+                }}
+               
+                .btn-action {{
+                    width: 100%;
+                    justify-content: center;
+                }}
+               
+                .file-meta {{
+                    flex-direction: column;
+                    gap: 10px;
+                    align-items: center;
+                }}
+            }}
+           
+            /* Animations */
+            @keyframes slideIn {{
+                from {{ opacity: 0; transform: translateY(-20px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+           
+            @keyframes fadeIn {{
+                from {{ opacity: 0; }}
+                to {{ opacity: 1; }}
+            }}
+           
+            .fade-in {{
+                animation: fadeIn 0.8s ease;
             }}
         </style>
     </head>
     <body>
-        <nav class="navbar">
-            <a href="/dashboard" class="logo">
-                <span>☁️</span>
-                <span>CloudSecure</span>
-            </a>
-            <div>
-                <a href="/dashboard" class="nav-btn primary">📁 Dashboard</a>
-                <a href="/logout" class="nav-btn secondary">🚪 Logout</a>
-            </div>
-        </nav>
-       
-        <div class="container">
-            {get_flash_html()}
-            <div class="profile-card">
-                <div class="profile-header">
-                    <div class="avatar-large">
-                        {session["username"][0].upper()}
+        <div class="main-container">
+            <nav class="navbar">
+                <a href="/dashboard" class="logo">
+                    <div class="logo-icon">
+                        <i class="fas fa-cloud"></i>
                     </div>
-                    <h1>{session["username"]}</h1>
-                    <p>Cloud Storage User</p>
+                    <span>CloudSecure</span>
+                </a>
+                <div class="user-menu">
+                    <div class="user-info">
+                        <div class="avatar">
+                            {session["username"][0].upper()}
+                        </div>
+                        <span class="username">Welcome, {session["username"]}</span>
+                    </div>
+                    <div class="nav-links">
+                        <a href="/profile" class="nav-btn primary">
+                            <i class="fas fa-user-circle"></i>
+                            Profile
+                        </a>
+                        <a href="/logout" class="nav-btn secondary">
+                            <i class="fas fa-sign-out-alt"></i>
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </nav>
+           
+            <div class="container fade-in">
+                {get_flash_html()}
+               
+                <div class="upload-section">
+                    <h2 class="section-title">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        Upload File
+                    </h2>
+                    <form method="POST" action="/upload" enctype="multipart/form-data" class="upload-form">
+                        <input type="file" name="file" required class="file-input" id="fileInput">
+                        <button type="submit" class="btn-upload">
+                            <i class="fas fa-upload"></i>
+                            Upload File
+                        </button>
+                    </form>
+                    <div class="upload-features">
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="feature-text">
+                                <strong>End-to-End Encryption</strong>
+                                <span>Military-grade AES-256 encryption</span>
+                            </div>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-infinity"></i>
+                            </div>
+                            <div class="feature-text">
+                                <strong>Persistent Storage</strong>
+                                <span>Files survive server restarts</span>
+                            </div>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-bolt"></i>
+                            </div>
+                            <div class="feature-text">
+                                <strong>Fast Transfers</strong>
+                                <span>High-speed uploads and downloads</span>
+                            </div>
+                        </div>
+                        <div class="feature">
+                            <div class="feature-icon">
+                                <i class="fas fa-mobile-alt"></i>
+                            </div>
+                            <div class="feature-text">
+                                <strong>Mobile Ready</strong>
+                                <span>Responsive design for all devices</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                
-                <div class="profile-stats">
-                    <div class="stat-card blue">
-                        <div class="stat-value">{total_files}</div>
-                        <div class="stat-label">Total Files</div>
+                <div class="files-section">
+                    <div class="section-header">
+                        <h2 class="section-title">
+                            <i class="fas fa-folder-open"></i>
+                            Your Files
+                        </h2>
+                        <div class="files-count">
+                            <i class="fas fa-file"></i>
+                            {len(files_list)} files
+                        </div>
                     </div>
-                    <div class="stat-card green">
-                        <div class="stat-value">{total_size_mb}</div>
-                        <div class="stat-label">Storage Used (MB)</div>
-                    </div>
-                </div>
-               
-                <div class="profile-info">
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <h3>👤 Username</h3>
-                            <p>{user['username']}</p>
-                        </div>
-                        <div class="info-item">
-                            <h3>📅 Member Since</h3>
-                            <p>{join_date}</p>
-                        </div>
-                        <div class="info-item">
-                            <h3>📤 First Upload</h3>
-                            <p>{first_upload}</p>
-                        </div>
-                        <div class="info-item">
-                            <h3>🆔 User ID</h3>
-                            <p>{user['id']}</p>
-                        </div>
+                    <div class="files-container">
+                        {files_html}
                     </div>
                 </div>
             </div>
+           
+            <footer class="footer">
+                <div class="footer-content">
+                    <div class="footer-logo">
+                        <i class="fas fa-cloud"></i>
+                        <span>CloudSecure</span>
+                    </div>
+                    <div class="footer-links">
+                        <a href="/dashboard">Dashboard</a>
+                        <a href="/profile">Profile</a>
+                        <a href="/logout">Logout</a>
+                    </div>
+                </div>
+            </footer>
         </div>
     </body>
     </html>
@@ -1140,3 +1456,4 @@ if __name__ == '__main__':
     print(f"👥 Пользователей: {len(app_data['users'])}")
     print(f"📁 Файлов: {len(app_data['files'])}")
     app.run(host='0.0.0.0', port=port, debug=False)
+
