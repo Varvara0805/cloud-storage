@@ -28,8 +28,8 @@ cloudinary.config(
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
-print("🚀 ЗАПУСК СЕРВЕРА - Cloudinary Storage")
-print("💾 ВСЕ данные хранятся в Cloudinary (пользователи, файлы, метаданные)")
+print("🚀 ЗАПУСК СЕРВЕРА")
+print("💾 ВСЕ данные хранятся в Cloudinary")
 
 # 🔧 ГЛОБАЛЬНАЯ ПЕРЕМЕННАЯ ДЛЯ ДАННЫХ
 app_data = {
@@ -39,56 +39,46 @@ app_data = {
 }
 
 # 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С CLOUDINARY DB
-def save_to_cloudinary(data, filename="database.json"):
-    """Сохраняем данные как JSON файл в Cloudinary"""
+def save_to_cloudinary(data):
+    """Сохраняем ВСЕ данные в Cloudinary"""
     try:
-        # Обновляем время изменения
         data['last_updated'] = str(datetime.now())
-       
-        # Конвертируем в JSON
         json_data = json.dumps(data, indent=2, default=str)
        
-        # Сохраняем в Cloudinary как raw файл
         result = cloudinary.uploader.upload(
             json_data.encode('utf-8'),
-            public_id=f"storage/db/{filename}",
+            public_id="storage/db/database",
             resource_type="raw",
             overwrite=True
         )
-        print(f"💾 База данных сохранена в Cloudinary")
         return True
     except Exception as e:
-        print(f"❌ Ошибка сохранения в Cloudinary: {e}")
+        print(f"❌ Ошибка сохранения: {e}")
         return False
 
-def load_from_cloudinary(filename="database.json"):
-    """Загружаем данные из Cloudinary"""
+def load_from_cloudinary():
+    """Загружаем ВСЕ данные из Cloudinary"""
     try:
-        # Пытаемся загрузить из Cloudinary
         result = cloudinary.api.resource(
-            f"storage/db/{filename}",
+            "storage/db/database",
             resource_type="raw"
         )
        
-        # Скачиваем файл
         response = requests.get(result['secure_url'])
         if response.status_code == 200:
             data = json.loads(response.text)
-            print(f"📂 База данных загружена из Cloudinary")
-            print(f"👥 Пользователей: {len(data.get('users', []))}")
-            print(f"📁 Файлов: {len(data.get('files', []))}")
+            print(f"✅ База данных загружена из Cloudinary")
             return data
-    except Exception as e:
-        print(f"ℹ️ Создаем новую базу данных: {e}")
+    except:
+        print("ℹ️ Создаем новую базу данных")
    
-    # Возвращаем пустую структуру если файла нет
     return {
         'users': [],
         'files': [],
         'last_updated': str(datetime.now())
     }
 
-def init_cloudinary_db():
+def init_db():
     """Инициализация базы данных в Cloudinary"""
     global app_data
    
@@ -105,28 +95,25 @@ def init_cloudinary_db():
             'created_at': str(datetime.now())
         }]
         save_to_cloudinary(app_data)
-        print("✅ Создан тестовый пользователь: admin / admin123")
-    else:
-        print(f"✅ Загружено {len(app_data['users'])} пользователей")
-        print(f"✅ Загружено {len(app_data['files'])} файлов")
+        print("✅ Тестовый пользователь: admin / admin123")
+   
+    print(f"📊 Пользователей: {len(app_data['users'])}")
+    print(f"📊 Файлов: {len(app_data['files'])}")
 
 # Инициализируем при старте
-init_cloudinary_db()
+init_db()
 
 # 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
 def get_user_by_username(username):
-    """Найти пользователя по имени"""
     for user in app_data['users']:
         if user['username'] == username:
             return user
     return None
 
 def get_user_files(user_id):
-    """Получить файлы пользователя"""
     return [f for f in app_data['files'] if f['user_id'] == user_id]
 
 def add_user(username, password_hash):
-    """Добавить нового пользователя"""
     new_id = max([u['id'] for u in app_data['users']], default=0) + 1
     new_user = {
         'id': new_id,
@@ -135,25 +122,22 @@ def add_user(username, password_hash):
         'created_at': str(datetime.now())
     }
     app_data['users'].append(new_user)
-    save_to_cloudinary(app_data)
+    save_to_cloudinary(app_data)  # Сохраняем в Cloudinary
     return new_user
 
 def add_file(file_data):
-    """Добавить файл в базу"""
     new_id = max([f['id'] for f in app_data['files']], default=0) + 1
     file_data['id'] = new_id
     app_data['files'].append(file_data)
-    save_to_cloudinary(app_data)
+    save_to_cloudinary(app_data)  # Сохраняем в Cloudinary
     return file_data
 
-def delete_file(file_id, user_id):
-    """Удалить файл"""
+def delete_file_record(file_id, user_id):
     app_data['files'] = [f for f in app_data['files']
                         if not (f['file_id'] == file_id and f['user_id'] == user_id)]
-    save_to_cloudinary(app_data)
+    save_to_cloudinary(app_data)  # Сохраняем в Cloudinary
 
 def get_file_by_id(file_id, user_id):
-    """Найти файл по ID"""
     for file in app_data['files']:
         if file['file_id'] == file_id and file['user_id'] == user_id:
             return file
@@ -191,14 +175,11 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-       
+      
         print(f"🔐 Попытка входа: {username}")
-       
+      
         user = get_user_by_username(username)
-       
-        # ДИАГНОСТИКА: покажем всех пользователей
-        print(f"👥 Все пользователи в системе: {[u['username'] for u in app_data['users']]}")
-       
+      
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['username']
             session['username'] = user['username']
@@ -208,7 +189,7 @@ def login():
         else:
             print(f"❌ Неудачный вход: {username}")
             add_flash_message('Invalid credentials', 'error')
-   
+  
     return f'''
     <html><body style="margin: 50px; font-family: Arial;">
         <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
@@ -232,33 +213,30 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-       
+      
         print(f"📝 Попытка регистрации: {username}")
-       
+      
         if len(password) < 6:
             add_flash_message('Password too short', 'error')
             return redirect('/register')
-       
-        # Проверяем существует ли пользователь
+      
         if get_user_by_username(username):
             print(f"❌ Пользователь уже существует: {username}")
             add_flash_message('User already exists', 'error')
             return redirect('/register')
-       
+      
         try:
             hashed_pw = generate_password_hash(password)
             new_user = add_user(username, hashed_pw)
            
-            print(f"✅ НОВЫЙ ПОЛЬЗОВАТЕЛЬ СОХРАНЕН В CLOUDINARY: {username}")
-            print(f"📊 Всего пользователей: {len(app_data['users'])}")
-           
+            print(f"✅ ПОЛЬЗОВАТЕЛЬ СОХРАНЕН В CLOUDINARY: {username}")
             add_flash_message('Registration successful!', 'success')
             return redirect('/login')
            
         except Exception as e:
             print(f"❌ Ошибка регистрации: {e}")
             add_flash_message(f'Registration error: {str(e)}', 'error')
-   
+  
     return f'''
     <html><body style="margin: 50px; font-family: Arial;">
         <div style="max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
@@ -278,15 +256,15 @@ def register():
 def dashboard():
     if 'user_id' not in session:
         return redirect('/login')
-   
+  
     user_id = session['user_id']
     files_list = get_user_files(user_id)
-   
+  
     files_html = ""
     for file in files_list:
         size_kb = round(file["file_size"]/1024, 1) if file["file_size"] else 0
         upload_date = datetime.strptime(file["uploaded_at"], '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M') if file["uploaded_at"] else 'Unknown'
-       
+      
         files_html += f'''
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
             <div>
@@ -299,10 +277,10 @@ def dashboard():
             </div>
         </div>
         '''
-   
+  
     if not files_html:
         files_html = '<p style="text-align: center; color: #666; padding: 40px;">No files yet. Upload your first file!</p>'
-   
+  
     return f'''
     <html><body style="margin: 0; font-family: Arial; background: #f0f0f0;">
         <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -313,7 +291,7 @@ def dashboard():
                 <a href="/logout" style="background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">🚪 Logout</a>
             </div>
         </div>
-       
+      
         <div style="max-width: 1000px; margin: 20px auto; padding: 20px;">
             {get_flash_html()}
             <div style="background: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -323,9 +301,9 @@ def dashboard():
                     <button type="submit" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">📎 Upload</button>
                 </form>
                 <p style="color: #666; font-size: 14px; margin-top: 10px;">Max file size: 16MB | Files are encrypted before upload</p>
-                <p style="color: #666; font-size: 12px; margin-top: 5px;">💾 Данные сохраняются в Cloudinary после перезапуска</p>
+                <p style="color: #28a745; font-size: 12px; margin-top: 5px;">✅ Все данные сохраняются после перезапуска сервера</p>
             </div>
-           
+          
             <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <h3 style="margin-top: 0;">📁 Your Files ({len(files_list)})</h3>
                 <div style="border: 1px solid #eee; border-radius: 5px;">{files_html}</div>
@@ -338,28 +316,28 @@ def dashboard():
 def upload_file():
     if 'user_id' not in session:
         return redirect('/login')
-   
+  
     if 'file' not in request.files:
         add_flash_message('No file selected', 'error')
         return redirect('/dashboard')
-   
+  
     file = request.files['file']
     if file.filename == '':
         add_flash_message('No file selected', 'error')
         return redirect('/dashboard')
-   
+  
     try:
         user_id = session['user_id']
         filename = secure_filename(file.filename)
         file_id = hashlib.md5(f"{user_id}_{filename}_{datetime.now()}".encode()).hexdigest()
-       
+      
         file_data = file.read()
         file_size = len(file_data)
-       
+      
         if file_size > 16 * 1024 * 1024:
             add_flash_message('File too large (max 16MB)', 'error')
             return redirect('/dashboard')
-       
+      
         # Шифруем и загружаем в Cloudinary
         encrypted_data = encrypt_file(file_data)
         result = cloudinary.uploader.upload(
@@ -367,8 +345,8 @@ def upload_file():
             public_id=f"storage/{user_id}/{file_id}_{filename}",
             resource_type="raw"
         )
-       
-        # Сохраняем метаданные в app_data
+      
+        # Сохраняем метаданные
         file_record = {
             'file_id': file_id,
             'filename': f"{file_id}_{filename}",
@@ -379,24 +357,24 @@ def upload_file():
             'cloudinary_public_id': result['public_id'],
             'uploaded_at': str(datetime.now())
         }
-       
-        add_file(file_record)
-       
+      
+        add_file(file_record)  # Сохраняет в Cloudinary
+      
         add_flash_message(f'✅ File "{filename}" uploaded successfully!', 'success')
-       
+      
     except Exception as e:
         add_flash_message(f'❌ Upload error: {str(e)}', 'error')
-   
+  
     return redirect('/dashboard')
 
 @app.route('/download/<file_id>')
 def download_file(file_id):
     if 'user_id' not in session:
         return redirect('/login')
-   
+  
     user_id = session['user_id']
     file = get_file_by_id(file_id, user_id)
-   
+  
     if file:
         try:
             response = requests.get(file['cloudinary_url'])
@@ -413,58 +391,58 @@ def download_file(file_id):
             add_flash_message(f'Download error: {str(e)}', 'error')
     else:
         add_flash_message('File not found', 'error')
-   
+  
     return redirect('/dashboard')
 
 @app.route('/delete/<file_id>')
 def delete_file(file_id):
     if 'user_id' not in session:
         return redirect('/login')
-   
+  
     user_id = session['user_id']
     file = get_file_by_id(file_id, user_id)
-   
+  
     if file:
         try:
             # Удаляем файл из Cloudinary
             if file['cloudinary_public_id']:
                 cloudinary.uploader.destroy(file['cloudinary_public_id'], resource_type="raw")
-           
+          
             # Удаляем запись из базы данных
-            delete_file(file_id, user_id)
-           
+            delete_file_record(file_id, user_id)  # Сохраняет изменения в Cloudinary
+          
             add_flash_message(f'✅ File "{file["original_filename"]}" deleted successfully!', 'success')
         except Exception as e:
             add_flash_message(f'❌ Delete error: {str(e)}', 'error')
     else:
         add_flash_message('File not found', 'error')
-   
+  
     return redirect('/dashboard')
 
 @app.route('/profile')
 def profile():
     if 'user_id' not in session:
         return redirect('/login')
-   
+  
     user_id = session['user_id']
     user = get_user_by_username(user_id)
-   
+  
     # Получаем статистику пользователя
     user_files = get_user_files(user_id)
     total_size = sum(f['file_size'] for f in user_files)
     total_files = len(user_files)
-   
+  
     total_size_mb = round(total_size / (1024 * 1024), 2) if total_size else 0
-   
+  
     # Форматируем даты
     join_date = datetime.strptime(user['created_at'], '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y') if user['created_at'] else 'Unknown'
-   
+  
     first_upload = 'No uploads yet'
     if user_files:
         upload_dates = [datetime.strptime(f['uploaded_at'], '%Y-%m-%d %H:%M:%S') for f in user_files if f['uploaded_at']]
         if upload_dates:
             first_upload = min(upload_dates).strftime('%d.%m.%Y')
-   
+  
     return f'''
     <html><body style="margin: 0; font-family: Arial; background: #f0f0f0;">
         <div style="background: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -475,20 +453,19 @@ def profile():
                 <a href="/logout" style="background: #6c757d; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none;">🚪 Logout</a>
             </div>
         </div>
-       
+      
         <div style="max-width: 800px; margin: 20px auto; padding: 20px;">
             {get_flash_html()}
             <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <h2 style="margin-top: 0; color: #333;">👤 User Profile</h2>
-               
+              
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #007bff;">
                         <h3 style="margin-top: 0; color: #007bff;">Account Info</h3>
                         <p><strong>Username:</strong> {user['username']}</p>
                         <p><strong>Member since:</strong> {join_date}</p>
-                        <p><strong>User ID:</strong> {user['id']}</p>
                     </div>
-                   
+                  
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #28a745;">
                         <h3 style="margin-top: 0; color: #28a745;">Storage Stats</h3>
                         <p><strong>Total files:</strong> {total_files}</p>
@@ -496,13 +473,14 @@ def profile():
                         <p><strong>First upload:</strong> {first_upload}</p>
                     </div>
                 </div>
-               
+              
                 <div style="background: #e7f3ff; padding: 20px; border-radius: 8px; border: 1px solid #b3d9ff;">
-                    <h3 style="margin-top: 0; color: #0056b3;">💡 System Information</h3>
-                    <p>✅ <strong>Data persistence:</strong> ALL data is saved in Cloudinary and survives server restart</p>
+                    <h3 style="margin-top: 0; color: #0056b3;">💡 Information</h3>
+                    <p>✅ <strong>Data persistence:</strong> ALL users and files are saved in Cloudinary</p>
+                    <p>✅ <strong>Server restart safe:</strong> Everything survives server restart</p>
                     <p>🔒 <strong>Encryption:</strong> Files are encrypted before uploading to cloud storage</p>
-                    <p>☁️ <strong>Storage:</strong> Database and files stored in Cloudinary (permanent storage)</p>
-                    <p>📊 <strong>Last DB sync:</strong> {app_data.get('last_updated', 'Unknown')}</p>
+                    <p>☁️ <strong>Cloud storage:</strong> Database and files stored permanently in Cloudinary</p>
+                    <p>🔄 <strong>Last sync:</strong> {app_data.get('last_updated', 'Just now')}</p>
                 </div>
             </div>
         </div>
@@ -515,37 +493,10 @@ def logout():
     add_flash_message('Logged out successfully', 'info')
     return redirect('/login')
 
-@app.route('/debug')
-def debug():
-    """Страница отладки"""
-    return f'''
-    <html><body style="margin: 20px; font-family: Arial;">
-        <h2>🔧 Debug Information</h2>
-        <div style="background: #f0f0f0; padding: 20px; border-radius: 10px;">
-            <h3>Database Status:</h3>
-            <p><strong>Total Users:</strong> {len(app_data['users'])}</p>
-            <p><strong>Total Files:</strong> {len(app_data['files'])}</p>
-            <p><strong>Last Updated:</strong> {app_data.get('last_updated', 'Never')}</p>
-           
-            <h3>Users:</h3>
-            <ul>
-                {''.join([f'<li>{u["username"]} (ID: {u["id"]})</li>' for u in app_data['users']])}
-            </ul>
-           
-            <h3>Files:</h3>
-            <ul>
-                {''.join([f'<li>{f["original_filename"]} - {f["user_id"]}</li>' for f in app_data['files'][:10]])}
-                {f'<li>... and {len(app_data["files"]) - 10} more</li>' if len(app_data["files"]) > 10 else ''}
-            </ul>
-        </div>
-        <br>
-        <a href="/dashboard">Back to Dashboard</a>
-    </body></html>
-    '''
-
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"🌐 Сервер запускается на порту {port}")
-    print(f"💾 Все данные сохраняются в Cloudinary")
-    print(f"🔑 Ключ шифрования: {'Установлен' if os.environ.get('ENCRYPTION_KEY') else 'Автогенерация (опасно!)'}")
+    print(f"💾 ВСЕ данные сохраняются в Cloudinary")
+    print(f"👥 Пользователей: {len(app_data['users'])}")
+    print(f"📁 Файлов: {len(app_data['files'])}")
     app.run(host='0.0.0.0', port=port, debug=False)
