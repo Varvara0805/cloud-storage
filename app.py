@@ -129,7 +129,576 @@ def add_file(file_data):
     app_data['files'].append(file_data)
     save_to_cloudinary(app_data)
     return file_data
-
+@app.route('/profile')
+def profile():
+    if 'user_id' not in session:
+        return redirect('/login')
+   
+    user_id = session['user_id']
+    user = get_user_by_username(user_id)
+   
+    if not user:
+        session.clear()
+        add_flash_message('User not found. Please login again.', 'error')
+        return redirect('/login')
+   
+    # Получаем файлы пользователя
+    user_files = get_user_files(user_id)
+    total_size = sum(f.get('file_size', 0) for f in user_files)
+    total_files = len(user_files)
+   
+    # Форматируем размер
+    total_size_mb = round(total_size / (1024 * 1024), 2) if total_size else 0
+   
+    # Форматируем дату регистрации
+    join_date = 'Unknown'
+    if user.get('created_at'):
+        try:
+            # Пробуем разные форматы дат
+            date_str = str(user['created_at'])
+            # Убираем микросекунды если есть
+            if '.' in date_str:
+                date_str = date_str.split('.')[0]
+           
+            try:
+                join_date = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S').strftime('%B %d, %Y')
+            except:
+                try:
+                    join_date = datetime.strptime(date_str, '%Y-%m-%d').strftime('%B %d, %Y')
+                except:
+                    join_date = date_str[:10]
+        except:
+            join_date = str(user.get('created_at', 'Unknown'))[:10]
+   
+    # Находим дату первой загрузки
+    first_upload = 'No uploads yet'
+    if user_files:
+        upload_dates = []
+        for f in user_files:
+            if f.get('uploaded_at'):
+                try:
+                    date_str = str(f['uploaded_at'])
+                    if '.' in date_str:
+                        date_str = date_str.split('.')[0]
+                   
+                    try:
+                        date_obj = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+                        upload_dates.append(date_obj)
+                    except:
+                        try:
+                            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                            upload_dates.append(date_obj)
+                        except:
+                            pass
+                except:
+                    pass
+       
+        if upload_dates:
+            first_upload = min(upload_dates).strftime('%B %d, %Y')
+   
+    # Стили для profile с Font Awesome иконками
+    return f'''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Profile | CloudSecure</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            :root {{
+                --primary: #6366f1;
+                --primary-dark: #4f46e5;
+                --secondary: #8b5cf6;
+                --accent: #ec4899;
+                --light: #f8fafc;
+                --dark: #1e293b;
+                --success: #10b981;
+                --gray: #64748b;
+                --radius-lg: 24px;
+                --radius-md: 16px;
+                --shadow: 0 20px 60px rgba(0,0,0,0.1);
+            }}
+           
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+           
+            body {{
+                font-family: 'Poppins', sans-serif;
+                background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+                min-height: 100vh;
+            }}
+           
+            .navbar {{
+                background: white;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                padding: 0 40px;
+                height: 80px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }}
+           
+            .logo {{
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                font-size: 26px;
+                font-weight: 700;
+                color: var(--primary);
+                text-decoration: none;
+            }}
+           
+            .logo-icon {{
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                width: 50px;
+                height: 50px;
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 24px;
+            }}
+           
+            .nav-btn {{
+                padding: 12px 24px;
+                border-radius: var(--radius-md);
+                text-decoration: none;
+                font-weight: 500;
+                font-size: 15px;
+                transition: all 0.3s ease;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }}
+           
+            .nav-btn.primary {{
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                color: white;
+                box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+            }}
+           
+            .nav-btn.primary:hover {{
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+            }}
+           
+            .nav-btn.secondary {{
+                background: white;
+                color: var(--gray);
+                border: 2px solid var(--gray-light);
+            }}
+           
+            .container {{
+                max-width: 1200px;
+                margin: 40px auto;
+                padding: 0 20px;
+            }}
+           
+            .profile-card {{
+                background: white;
+                border-radius: var(--radius-lg);
+                box-shadow: var(--shadow);
+                overflow: hidden;
+                animation: fadeIn 0.8s ease;
+            }}
+           
+            @keyframes fadeIn {{
+                from {{ opacity: 0; transform: translateY(30px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+           
+            .profile-header {{
+                background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+                padding: 80px 40px;
+                text-align: center;
+                color: white;
+                position: relative;
+                overflow: hidden;
+            }}
+           
+            .profile-header::before {{
+                content: '';
+                position: absolute;
+                top: -50%;
+                left: -50%;
+                width: 200%;
+                height: 200%;
+                background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+                background-size: 30px 30px;
+                opacity: 0.2;
+                animation: float 20s linear infinite;
+            }}
+           
+            .avatar-large {{
+                width: 150px;
+                height: 150px;
+                background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 60px;
+                font-weight: 700;
+                margin: 0 auto 30px;
+                border: 6px solid white;
+                box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+                position: relative;
+                z-index: 1;
+            }}
+           
+            .profile-header h1 {{
+                font-size: 42px;
+                font-weight: 700;
+                margin-bottom: 15px;
+                position: relative;
+                z-index: 1;
+            }}
+           
+            .profile-header p {{
+                font-size: 18px;
+                opacity: 0.9;
+                position: relative;
+                z-index: 1;
+            }}
+           
+            .profile-stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 25px;
+                padding: 50px;
+            }}
+           
+            .stat-card {{
+                background: var(--light);
+                border-radius: var(--radius-md);
+                padding: 35px 30px;
+                text-align: center;
+                transition: all 0.3s ease;
+                border: 2px solid transparent;
+            }}
+           
+            .stat-card:hover {{
+                transform: translateY(-10px);
+                border-color: var(--primary);
+                box-shadow: 0 15px 40px rgba(0,0,0,0.1);
+            }}
+           
+            .stat-card.blue {{
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                color: white;
+            }}
+           
+            .stat-card.green {{
+                background: linear-gradient(135deg, var(--success), #059669);
+                color: white;
+            }}
+           
+            .stat-card.pink {{
+                background: linear-gradient(135deg, var(--accent), #db2777);
+                color: white;
+            }}
+           
+            .stat-card.orange {{
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+                color: white;
+            }}
+           
+            .stat-icon {{
+                font-size: 48px;
+                margin-bottom: 20px;
+                opacity: 0.9;
+            }}
+           
+            .stat-value {{
+                font-size: 52px;
+                font-weight: 700;
+                margin-bottom: 10px;
+            }}
+           
+            .stat-label {{
+                font-size: 18px;
+                opacity: 0.9;
+            }}
+           
+            .profile-info {{
+                padding: 50px;
+                background: var(--light);
+            }}
+           
+            .info-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 25px;
+                margin-bottom: 40px;
+            }}
+           
+            .info-item {{
+                background: white;
+                padding: 30px;
+                border-radius: var(--radius-md);
+                box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+                transition: all 0.3s ease;
+            }}
+           
+            .info-item:hover {{
+                transform: translateY(-5px);
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            }}
+           
+            .info-icon {{
+                width: 60px;
+                height: 60px;
+                background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+                border-radius: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--primary);
+                font-size: 28px;
+                margin-bottom: 20px;
+            }}
+           
+            .info-content h3 {{
+                color: var(--gray);
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                margin-bottom: 10px;
+            }}
+           
+            .info-content p {{
+                font-size: 22px;
+                font-weight: 600;
+                color: var(--dark);
+            }}
+           
+            .features {{
+                background: white;
+                padding: 40px;
+                border-radius: var(--radius-md);
+                margin-top: 30px;
+            }}
+           
+            .features h2 {{
+                color: var(--dark);
+                margin-bottom: 30px;
+                display: flex;
+                align-items: center;
+                gap: 15px;
+                font-size: 28px;
+            }}
+           
+            .feature-list {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+            }}
+           
+            .feature-item {{
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                padding: 20px;
+                background: var(--light);
+                border-radius: var(--radius-md);
+                transition: all 0.3s ease;
+            }}
+           
+            .feature-item:hover {{
+                background: white;
+                transform: translateX(10px);
+                box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+            }}
+           
+            .feature-item i {{
+                color: var(--primary);
+                font-size: 24px;
+                width: 40px;
+            }}
+           
+            @media (max-width: 768px) {{
+                .navbar {{
+                    padding: 0 20px;
+                    flex-direction: column;
+                    height: auto;
+                    padding: 20px;
+                    gap: 20px;
+                }}
+               
+                .profile-stats {{
+                    grid-template-columns: 1fr;
+                    padding: 30px 20px;
+                }}
+               
+                .profile-info {{
+                    padding: 30px 20px;
+                }}
+               
+                .info-grid {{
+                    grid-template-columns: 1fr;
+                }}
+               
+                .profile-header {{
+                    padding: 40px 20px;
+                }}
+               
+                .avatar-large {{
+                    width: 120px;
+                    height: 120px;
+                    font-size: 48px;
+                }}
+               
+                .profile-header h1 {{
+                    font-size: 32px;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <nav class="navbar">
+            <a href="/dashboard" class="logo">
+                <div class="logo-icon">
+                    <i class="fas fa-cloud"></i>
+                </div>
+                <span>CloudSecure</span>
+            </a>
+            <div>
+                <a href="/dashboard" class="nav-btn primary">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Dashboard
+                </a>
+                <a href="/logout" class="nav-btn secondary">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+        </nav>
+       
+        <div class="container">
+            <div class="profile-card">
+                <div class="profile-header">
+                    <div class="avatar-large">
+                        {session["username"][0].upper() if session.get("username") else "U"}
+                    </div>
+                    <h1>{session.get("username", "User")}</h1>
+                    <p>Premium Cloud Storage User</p>
+                </div>
+               
+                <div class="profile-stats">
+                    <div class="stat-card blue">
+                        <div class="stat-icon">
+                            <i class="fas fa-file"></i>
+                        </div>
+                        <div class="stat-value">{total_files}</div>
+                        <div class="stat-label">Total Files</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-icon">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <div class="stat-value">{total_size_mb}</div>
+                        <div class="stat-label">Storage Used (MB)</div>
+                    </div>
+                    <div class="stat-card pink">
+                        <div class="stat-icon">
+                            <i class="fas fa-user-check"></i>
+                        </div>
+                        <div class="stat-value">{user.get('id', 0)}</div>
+                        <div class="stat-label">User ID</div>
+                    </div>
+                    <div class="stat-card orange">
+                        <div class="stat-icon">
+                            <i class="fas fa-crown"></i>
+                        </div>
+                        <div class="stat-value">Premium</div>
+                        <div class="stat-label">Account Tier</div>
+                    </div>
+                </div>
+               
+                <div class="profile-info">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-user-tag"></i>
+                            </div>
+                            <div class="info-content">
+                                <h3>Username</h3>
+                                <p>{user.get('username', 'Unknown')}</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-calendar-plus"></i>
+                            </div>
+                            <div class="info-content">
+                                <h3>Member Since</h3>
+                                <p>{join_date}</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="info-content">
+                                <h3>First Upload</h3>
+                                <p>{first_upload}</p>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-shield-alt"></i>
+                            </div>
+                            <div class="info-content">
+                                <h3>Security Level</h3>
+                                <p>Military Grade</p>
+                            </div>
+                        </div>
+                    </div>
+                   
+                    <div class="features">
+                        <h2>
+                            <i class="fas fa-star"></i>
+                            Premium Features
+                        </h2>
+                        <div class="feature-list">
+                            <div class="feature-item">
+                                <i class="fas fa-lock"></i>
+                                <span>End-to-end encryption</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-infinity"></i>
+                                <span>Persistent storage</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-bolt"></i>
+                                <span>High-speed transfers</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-mobile-alt"></i>
+                                <span>Mobile optimized</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Automatic backups</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="fas fa-globe"></i>
+                                <span>Global CDN</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
 def delete_file_record(file_id, user_id):
     app_data['files'] = [f for f in app_data['files']
                         if not (f['file_id'] == file_id and f['user_id'] == user_id)]
@@ -1456,4 +2025,5 @@ if __name__ == '__main__':
     print(f"👥 Пользователей: {len(app_data['users'])}")
     print(f"📁 Файлов: {len(app_data['files'])}")
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
