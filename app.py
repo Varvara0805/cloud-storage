@@ -150,29 +150,30 @@ def decrypt_file(encrypted_data):
 messages = []
 def add_flash_message(message, category='info'):
     messages.append((category, message))
+
 def get_flash_html():
     global messages
     html = ''
     for category, message in messages:
         if category == 'error':
             html += f'''
-            <div class="alert alert-error">
-                <div class="alert-icon">⚠️</div>
-                <div class="alert-content">{message}</div>
+            <div style="background: #fee; border-left: 4px solid #f00; padding: 12px; margin: 10px 0; border-radius: 4px; display: flex; align-items: center; gap: 10px;">
+                <span style="color: #f00;">⚠️</span>
+                <span style="color: #333;">{message}</span>
             </div>
             '''
         elif category == 'success':
             html += f'''
-            <div class="alert alert-success">
-                <div class="alert-icon">✅</div>
-                <div class="alert-content">{message}</div>
+            <div style="background: #efe; border-left: 4px solid #0a0; padding: 12px; margin: 10px 0; border-radius: 4px; display: flex; align-items: center; gap: 10px;">
+                <span style="color: #0a0;">✅</span>
+                <span style="color: #333;">{message}</span>
             </div>
             '''
         else:
             html += f'''
-            <div class="alert alert-info">
-                <div class="alert-icon">ℹ️</div>
-                <div class="alert-content">{message}</div>
+            <div style="background: #eef; border-left: 4px solid #00a; padding: 12px; margin: 10px 0; border-radius: 4px; display: flex; align-items: center; gap: 10px;">
+                <span style="color: #00a;">ℹ️</span>
+                <span style="color: #333;">{message}</span>
             </div>
             '''
     messages = []
@@ -203,157 +204,124 @@ def login():
    
     return f'''
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Login | CloudSecure</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
             body {{
-                font-family: 'Inter', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                margin: 0;
                 padding: 20px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
             }}
-            .login-container {{
+            .login-box {{
                 background: white;
-                border-radius: 24px;
+                border-radius: 20px;
                 box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                 width: 100%;
-                max-width: 440px;
+                max-width: 400px;
                 overflow: hidden;
             }}
             .login-header {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
                 padding: 40px 30px;
                 text-align: center;
-                color: white;
             }}
             .login-header h1 {{
-                font-size: 32px;
-                font-weight: 700;
-                margin-bottom: 8px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
+                margin: 0;
+                font-size: 28px;
+                font-weight: 600;
             }}
             .login-header p {{
+                margin: 10px 0 0;
                 opacity: 0.9;
-                font-size: 16px;
             }}
-            .login-form {{
+            .login-content {{
                 padding: 40px;
             }}
+            .test-account {{
+                background: #f8f9fa;
+                border-radius: 10px;
+                padding: 15px;
+                margin-bottom: 20px;
+                text-align: center;
+                border: 1px solid #e9ecef;
+            }}
+            .test-account strong {{
+                color: #333;
+                display: block;
+                margin-bottom: 5px;
+            }}
+            .test-account span {{
+                color: #666;
+                font-size: 14px;
+            }}
             .form-group {{
-                margin-bottom: 24px;
+                margin-bottom: 20px;
             }}
             .form-group label {{
                 display: block;
                 margin-bottom: 8px;
+                color: #333;
                 font-weight: 500;
-                color: #2d3748;
-                font-size: 14px;
             }}
             .form-control {{
                 width: 100%;
-                padding: 14px 16px;
-                border: 2px solid #e2e8f0;
-                border-radius: 12px;
+                padding: 12px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 10px;
                 font-size: 16px;
-                transition: all 0.3s ease;
+                transition: border-color 0.3s;
             }}
             .form-control:focus {{
                 outline: none;
                 border-color: #667eea;
-                box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
             }}
             .btn {{
                 width: 100%;
-                padding: 16px;
+                padding: 15px;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 color: white;
                 border: none;
-                border-radius: 12px;
+                border-radius: 10px;
                 font-size: 16px;
                 font-weight: 600;
                 cursor: pointer;
-                transition: all 0.3s ease;
+                transition: transform 0.3s, box-shadow 0.3s;
             }}
             .btn:hover {{
                 transform: translateY(-2px);
-                box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-            }}
-            .test-account {{
-                background: #f7fafc;
-                border: 2px solid #e2e8f0;
-                border-radius: 12px;
-                padding: 16px;
-                margin: 24px 0;
-                text-align: center;
-            }}
-            .test-account strong {{
-                color: #4a5568;
-                display: block;
-                margin-bottom: 4px;
-            }}
-            .test-account span {{
-                color: #718096;
-                font-size: 14px;
+                box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
             }}
             .register-link {{
                 text-align: center;
-                margin-top: 24px;
-                color: #718096;
+                margin-top: 20px;
+                color: #666;
             }}
             .register-link a {{
                 color: #667eea;
                 text-decoration: none;
-                font-weight: 600;
+                font-weight: 500;
             }}
             .register-link a:hover {{
                 text-decoration: underline;
             }}
-            .alert {{
-                padding: 16px;
-                border-radius: 12px;
-                margin-bottom: 24px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }}
-            .alert-error {{
-                background: #fed7d7;
-                color: #9b2c2c;
-                border-left: 4px solid #f56565;
-            }}
-            .alert-success {{
-                background: #c6f6d5;
-                color: #276749;
-                border-left: 4px solid #48bb78;
-            }}
-            .alert-info {{
-                background: #bee3f8;
-                color: #2c5282;
-                border-left: 4px solid #4299e1;
-            }}
-            .alert-icon {{
-                font-size: 20px;
-            }}
         </style>
     </head>
     <body>
-        <div class="login-container">
+        <div class="login-box">
             <div class="login-header">
                 <h1>🔐 CloudSecure</h1>
-                <p>Secure cloud storage with end-to-end encryption</p>
+                <p>Secure Cloud Storage</p>
             </div>
-            <div class="login-form">
+            <div class="login-content">
                 {get_flash_html()}
                 <div class="test-account">
                     <strong>Test Account</strong>
@@ -362,11 +330,11 @@ def login():
                 <form method="POST">
                     <div class="form-group">
                         <label for="username">Username</label>
-                        <input type="text" id="username" name="username" class="form-control" placeholder="Enter your username" required>
+                        <input type="text" id="username" name="username" class="form-control" placeholder="Enter username" required>
                     </div>
                     <div class="form-group">
                         <label for="password">Password</label>
-                        <input type="password" id="password" name="password" class="form-control" placeholder="Enter your password" required>
+                        <input type="password" id="password" name="password" class="form-control" placeholder="Enter password" required>
                     </div>
                     <button type="submit" class="btn">Sign In</button>
                 </form>
@@ -403,142 +371,117 @@ def register():
    
     return f'''
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Register | CloudSecure</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{
-                font-family: 'Inter', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
+                margin: 0;
                 padding: 20px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
             }}
-            .register-container {{
+            .register-box {{
                 background: white;
-                border-radius: 24px;
+                border-radius: 20px;
                 box-shadow: 0 20px 60px rgba(0,0,0,0.3);
                 width: 100%;
-                max-width: 440px;
+                max-width: 400px;
                 overflow: hidden;
             }}
             .register-header {{
                 background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+                color: white;
                 padding: 40px 30px;
                 text-align: center;
-                color: white;
             }}
             .register-header h1 {{
-                font-size: 32px;
-                font-weight: 700;
-                margin-bottom: 8px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 12px;
+                margin: 0;
+                font-size: 28px;
+                font-weight: 600;
             }}
             .register-header p {{
+                margin: 10px 0 0;
                 opacity: 0.9;
-                font-size: 16px;
             }}
-            .register-form {{
+            .register-content {{
                 padding: 40px;
             }}
             .form-group {{
-                margin-bottom: 24px;
+                margin-bottom: 20px;
             }}
             .form-group label {{
                 display: block;
                 margin-bottom: 8px;
+                color: #333;
                 font-weight: 500;
-                color: #2d3748;
-                font-size: 14px;
             }}
             .form-control {{
                 width: 100%;
-                padding: 14px 16px;
-                border: 2px solid #e2e8f0;
-                border-radius: 12px;
+                padding: 12px 15px;
+                border: 2px solid #e1e5e9;
+                border-radius: 10px;
                 font-size: 16px;
-                transition: all 0.3s ease;
+                transition: border-color 0.3s;
             }}
             .form-control:focus {{
                 outline: none;
                 border-color: #4facfe;
-                box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
             }}
             .btn {{
                 width: 100%;
-                padding: 16px;
+                padding: 15px;
                 background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
                 color: white;
                 border: none;
-                border-radius: 12px;
+                border-radius: 10px;
                 font-size: 16px;
                 font-weight: 600;
                 cursor: pointer;
-                transition: all 0.3s ease;
+                transition: transform 0.3s, box-shadow 0.3s;
             }}
             .btn:hover {{
                 transform: translateY(-2px);
-                box-shadow: 0 10px 25px rgba(79, 172, 254, 0.4);
+                box-shadow: 0 10px 20px rgba(79, 172, 254, 0.4);
             }}
             .login-link {{
                 text-align: center;
-                margin-top: 24px;
-                color: #718096;
+                margin-top: 20px;
+                color: #666;
             }}
             .login-link a {{
                 color: #4facfe;
                 text-decoration: none;
-                font-weight: 600;
+                font-weight: 500;
             }}
             .login-link a:hover {{
                 text-decoration: underline;
             }}
-            .alert {{
-                padding: 16px;
-                border-radius: 12px;
-                margin-bottom: 24px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }}
-            .alert-error {{
-                background: #fed7d7;
-                color: #9b2c2c;
-                border-left: 4px solid #f56565;
-            }}
-            .alert-success {{
-                background: #c6f6d5;
-                color: #276749;
-                border-left: 4px solid #48bb78;
-            }}
             .password-hint {{
-                font-size: 12px;
-                color: #718096;
-                margin-top: 4px;
+                font-size: 13px;
+                color: #666;
+                margin-top: 5px;
             }}
         </style>
     </head>
     <body>
-        <div class="register-container">
+        <div class="register-box">
             <div class="register-header">
                 <h1>📝 Create Account</h1>
-                <p>Join our secure cloud storage service</p>
+                <p>Join CloudSecure today</p>
             </div>
-            <div class="register-form">
+            <div class="register-content">
                 {get_flash_html()}
                 <form method="POST">
                     <div class="form-group">
                         <label for="username">Username</label>
-                        <input type="text" id="username" name="username" class="form-control" placeholder="Choose a username" required>
+                        <input type="text" id="username" name="username" class="form-control" placeholder="Choose username" required>
                     </div>
                     <div class="form-group">
                         <label for="password">Password</label>
@@ -566,6 +509,7 @@ def dashboard():
    
     files_html = ""
     for file in files_list:
+        # Безопасное получение данных
         size_kb = 0
         if file.get("file_size"):
             try:
@@ -587,35 +531,25 @@ def dashboard():
         file_id = file.get("file_id", "")
        
         files_html += f'''
-        <div class="file-card">
-            <div class="file-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-                    <polyline points="13 2 13 9 20 9"/>
-                </svg>
-            </div>
-            <div class="file-info">
-                <div class="file-name">{filename}</div>
-                <div class="file-meta">
-                    <span class="file-size">{size_kb} KB</span>
-                    <span class="file-date">📅 {upload_date}</span>
+        <div style="background: white; border: 1px solid #e1e5e9; border-radius: 12px; padding: 20px; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between; transition: all 0.3s;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="background: linear-gradient(135deg, #667eea, #764ba2); width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white;">
+                    📁
+                </div>
+                <div>
+                    <div style="font-weight: 600; color: #333; margin-bottom: 5px;">{filename}</div>
+                    <div style="font-size: 13px; color: #666;">
+                        <span style="margin-right: 15px;">📦 {size_kb} KB</span>
+                        <span>📅 {upload_date}</span>
+                    </div>
                 </div>
             </div>
-            <div class="file-actions">
-                <a href="/download/{file_id}" class="btn-download">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download
+            <div style="display: flex; gap: 10px;">
+                <a href="/download/{file_id}" style="background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
+                    ⬇️ Download
                 </a>
-                <a href="/delete/{file_id}" onclick="return confirm('Delete {filename}?')" class="btn-delete">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                    Delete
+                <a href="/delete/{file_id}" onclick="return confirm('Delete {filename}?')" style="background: #f56565; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
+                    🗑️ Delete
                 </a>
             </div>
         </div>
@@ -623,45 +557,27 @@ def dashboard():
    
     if not files_html:
         files_html = '''
-        <div class="empty-state">
-            <div class="empty-icon">📁</div>
-            <h3>No files yet</h3>
+        <div style="text-align: center; padding: 60px 20px; color: #666;">
+            <div style="font-size: 60px; margin-bottom: 20px;">📁</div>
+            <h3 style="font-size: 24px; font-weight: 500; margin-bottom: 10px;">No files yet</h3>
             <p>Upload your first file to get started</p>
         </div>
         '''
    
     return f'''
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Dashboard | CloudSecure</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            :root {{
-                --primary: #667eea;
-                --primary-dark: #5a67d8;
-                --secondary: #764ba2;
-                --success: #48bb78;
-                --danger: #f56565;
-                --warning: #ed8936;
-                --light: #f7fafc;
-                --dark: #2d3748;
-                --gray: #718096;
-                --gray-light: #e2e8f0;
-            }}
-           
-            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-           
             body {{
-                font-family: 'Inter', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                margin: 0;
                 background: #f5f7fa;
-                color: var(--dark);
-                line-height: 1.6;
+                color: #333;
             }}
-           
-            /* Navigation */
             .navbar {{
                 background: white;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.1);
@@ -674,362 +590,129 @@ def dashboard():
                 top: 0;
                 z-index: 1000;
             }}
-           
             .logo {{
                 display: flex;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
                 font-size: 24px;
-                font-weight: 700;
-                color: var(--primary);
+                font-weight: 600;
+                color: #667eea;
                 text-decoration: none;
             }}
-           
             .user-menu {{
                 display: flex;
                 align-items: center;
-                gap: 20px;
+                gap: 15px;
             }}
-           
             .user-info {{
                 display: flex;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
             }}
-           
             .avatar {{
                 width: 40px;
                 height: 40px;
-                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                background: linear-gradient(135deg, #667eea, #764ba2);
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 color: white;
                 font-weight: 600;
-                font-size: 16px;
             }}
-           
-            .username {{
-                font-weight: 500;
-                color: var(--dark);
-            }}
-           
-            .nav-links {{
-                display: flex;
-                gap: 10px;
-            }}
-           
             .nav-btn {{
                 padding: 10px 20px;
                 border-radius: 8px;
                 text-decoration: none;
                 font-weight: 500;
                 font-size: 14px;
-                transition: all 0.3s ease;
-                display: flex;
-                align-items: center;
-                gap: 8px;
             }}
-           
             .nav-btn.primary {{
-                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
             }}
-           
             .nav-btn.secondary {{
-                background: var(--light);
-                color: var(--gray);
-                border: 1px solid var(--gray-light);
+                background: #f8f9fa;
+                color: #666;
+                border: 1px solid #e1e5e9;
             }}
-           
-            .nav-btn:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
-            }}
-           
-            /* Main Content */
             .container {{
                 max-width: 1200px;
                 margin: 40px auto;
                 padding: 0 20px;
             }}
-           
-            /* Upload Section */
             .upload-section {{
                 background: white;
                 border-radius: 16px;
-                padding: 40px;
+                padding: 30px;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.08);
                 margin-bottom: 30px;
             }}
-           
             .section-title {{
                 font-size: 24px;
                 font-weight: 600;
                 margin-bottom: 20px;
-                color: var(--dark);
-                display: flex;
-                align-items: center;
-                gap: 12px;
+                color: #333;
             }}
-           
             .upload-form {{
                 display: flex;
                 gap: 15px;
                 align-items: center;
                 margin-bottom: 20px;
             }}
-           
             .file-input {{
                 flex: 1;
-                padding: 16px;
-                border: 2px dashed var(--gray-light);
-                border-radius: 12px;
+                padding: 15px;
+                border: 2px dashed #cbd5e0;
+                border-radius: 10px;
                 font-size: 16px;
-                transition: all 0.3s ease;
-                background: var(--light);
+                background: #f8f9fa;
             }}
-           
-            .file-input:hover {{
-                border-color: var(--primary);
-                background: white;
-            }}
-           
             .btn-upload {{
-                padding: 16px 32px;
-                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                padding: 15px 30px;
+                background: linear-gradient(135deg, #48bb78, #38a169);
                 color: white;
                 border: none;
-                border-radius: 12px;
+                border-radius: 10px;
                 font-size: 16px;
                 font-weight: 600;
                 cursor: pointer;
-                transition: all 0.3s ease;
-                display: flex;
-                align-items: center;
-                gap: 10px;
             }}
-           
-            .btn-upload:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-            }}
-           
             .upload-info {{
                 display: flex;
                 gap: 20px;
-                margin-top: 15px;
-                color: var(--gray);
+                color: #666;
                 font-size: 14px;
             }}
-           
-            .info-item {{
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }}
-           
-            /* Files Section */
             .files-section {{
                 background: white;
                 border-radius: 16px;
-                padding: 40px;
+                padding: 30px;
                 box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             }}
-           
             .section-header {{
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                margin-bottom: 30px;
+                margin-bottom: 25px;
             }}
-           
             .files-count {{
-                background: var(--light);
-                color: var(--primary);
+                background: #edf2f7;
+                color: #667eea;
                 padding: 8px 16px;
                 border-radius: 20px;
                 font-weight: 600;
                 font-size: 14px;
             }}
-           
-            /* File Cards */
-            .file-card {{
-                display: flex;
-                align-items: center;
-                padding: 20px;
-                border: 1px solid var(--gray-light);
-                border-radius: 12px;
-                margin-bottom: 15px;
-                transition: all 0.3s ease;
-            }}
-           
-            .file-card:hover {{
-                transform: translateX(5px);
-                border-color: var(--primary);
-                box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
-            }}
-           
-            .file-icon {{
-                background: linear-gradient(135deg, var(--primary), var(--secondary));
-                width: 48px;
-                height: 48px;
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                margin-right: 20px;
-                color: white;
-            }}
-           
-            .file-info {{
-                flex: 1;
-            }}
-           
-            .file-name {{
-                font-weight: 600;
-                margin-bottom: 6px;
-                color: var(--dark);
-            }}
-           
-            .file-meta {{
-                display: flex;
-                gap: 20px;
-                color: var(--gray);
-                font-size: 14px;
-            }}
-           
-            .file-actions {{
-                display: flex;
-                gap: 10px;
-            }}
-           
-            .btn-download, .btn-delete {{
-                padding: 10px 20px;
-                border-radius: 8px;
-                text-decoration: none;
-                font-weight: 500;
-                font-size: 14px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                transition: all 0.3s ease;
-            }}
-           
-            .btn-download {{
-                background: var(--light);
-                color: var(--primary);
-                border: 1px solid var(--gray-light);
-            }}
-           
-            .btn-download:hover {{
-                background: var(--primary);
-                color: white;
-            }}
-           
-            .btn-delete {{
-                background: #fed7d7;
-                color: var(--danger);
-                border: 1px solid #fc8181;
-            }}
-           
-            .btn-delete:hover {{
-                background: var(--danger);
-                color: white;
-            }}
-           
-            /* Empty State */
-            .empty-state {{
-                text-align: center;
-                padding: 60px 20px;
-            }}
-           
-            .empty-icon {{
-                font-size: 64px;
-                margin-bottom: 20px;
-                opacity: 0.5;
-            }}
-           
-            .empty-state h3 {{
-                font-size: 24px;
-                font-weight: 600;
-                margin-bottom: 10px;
-                color: var(--dark);
-            }}
-           
-            .empty-state p {{
-                color: var(--gray);
-                font-size: 16px;
-            }}
-           
-            /* Alerts */
-            .alert {{
-                padding: 16px;
-                border-radius: 12px;
-                margin-bottom: 24px;
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }}
-           
-            .alert-error {{
-                background: #fed7d7;
-                color: #9b2c2c;
-                border-left: 4px solid var(--danger);
-            }}
-           
-            .alert-success {{
-                background: #c6f6d5;
-                color: #276749;
-                border-left: 4px solid var(--success);
-            }}
-           
-            .alert-info {{
-                background: #bee3f8;
-                color: #2c5282;
-                border-left: 4px solid #4299e1;
-            }}
-           
-            .alert-icon {{
-                font-size: 20px;
-            }}
-           
-            /* Responsive */
             @media (max-width: 768px) {{
                 .navbar {{
                     padding: 0 20px;
                 }}
-               
-                .nav-links {{
-                    display: none;
-                }}
-               
                 .upload-form {{
                     flex-direction: column;
                 }}
-               
                 .file-input, .btn-upload {{
                     width: 100%;
-                }}
-               
-                .file-card {{
-                    flex-direction: column;
-                    text-align: center;
-                }}
-               
-                .file-icon {{
-                    margin-right: 0;
-                    margin-bottom: 15px;
-                }}
-               
-                .file-info {{
-                    margin-bottom: 15px;
-                }}
-               
-                .file-actions {{
-                    width: 100%;
-                    justify-content: center;
                 }}
             }}
         </style>
@@ -1045,24 +728,11 @@ def dashboard():
                     <div class="avatar">
                         {session["username"][0].upper()}
                     </div>
-                    <span class="username">Hello, {session["username"]}</span>
+                    <span>Hello, {session["username"]}</span>
                 </div>
-                <div class="nav-links">
-                    <a href="/profile" class="nav-btn primary">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        Profile
-                    </a>
-                    <a href="/logout" class="nav-btn secondary">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                            <polyline points="16 17 21 12 16 7"/>
-                            <line x1="21" y1="12" x2="9" y2="12"/>
-                        </svg>
-                        Logout
-                    </a>
+                <div style="display: flex; gap: 10px;">
+                    <a href="/profile" class="nav-btn primary">👤 Profile</a>
+                    <a href="/logout" class="nav-btn secondary">🚪 Logout</a>
                 </div>
             </div>
         </nav>
@@ -1074,38 +744,12 @@ def dashboard():
                 <h2 class="section-title">📤 Upload File</h2>
                 <form method="POST" action="/upload" enctype="multipart/form-data" class="upload-form">
                     <input type="file" name="file" required class="file-input">
-                    <button type="submit" class="btn-upload">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Upload File
-                    </button>
+                    <button type="submit" class="btn-upload">📎 Upload File</button>
                 </form>
                 <div class="upload-info">
-                    <div class="info-item">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12" y2="16"/>
-                        </svg>
-                        Max size: 16MB
-                    </div>
-                    <div class="info-item">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                        End-to-end encrypted
-                    </div>
-                    <div class="info-item">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                        Data persists after restart
-                    </div>
+                    <div>📦 Max size: 16MB</div>
+                    <div>🔒 End-to-end encrypted</div>
+                    <div>💾 Data persists after restart</div>
                 </div>
             </div>
            
@@ -1270,18 +914,16 @@ def profile():
    
     return f'''
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Profile | CloudSecure</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{
-                font-family: 'Inter', sans-serif;
-                background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-                min-height: 100vh;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                margin: 0;
+                background: #f5f7fa;
             }}
             .navbar {{
                 background: white;
@@ -1295,16 +937,11 @@ def profile():
             .logo {{
                 display: flex;
                 align-items: center;
-                gap: 12px;
+                gap: 10px;
                 font-size: 24px;
-                font-weight: 700;
+                font-weight: 600;
                 color: #667eea;
                 text-decoration: none;
-            }}
-            .user-menu {{
-                display: flex;
-                align-items: center;
-                gap: 20px;
             }}
             .nav-btn {{
                 padding: 10px 20px;
@@ -1312,16 +949,15 @@ def profile():
                 text-decoration: none;
                 font-weight: 500;
                 font-size: 14px;
-                transition: all 0.3s ease;
             }}
             .nav-btn.primary {{
                 background: linear-gradient(135deg, #667eea, #764ba2);
                 color: white;
             }}
             .nav-btn.secondary {{
-                background: #f7fafc;
-                color: #718096;
-                border: 1px solid #e2e8f0;
+                background: #f8f9fa;
+                color: #666;
+                border: 1px solid #e1e5e9;
             }}
             .container {{
                 max-width: 1000px;
@@ -1339,7 +975,6 @@ def profile():
                 padding: 60px 40px;
                 text-align: center;
                 color: white;
-                position: relative;
             }}
             .avatar-large {{
                 width: 120px;
@@ -1365,23 +1000,16 @@ def profile():
                 font-size: 16px;
             }}
             .profile-stats {{
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
+                display: flex;
                 gap: 20px;
                 padding: 40px;
             }}
             .stat-card {{
+                flex: 1;
                 background: #f7fafc;
                 border-radius: 16px;
                 padding: 30px;
                 text-align: center;
-                transition: all 0.3s ease;
-                border: 2px solid transparent;
-            }}
-            .stat-card:hover {{
-                border-color: #667eea;
-                transform: translateY(-5px);
-                box-shadow: 0 10px 25px rgba(102, 126, 234, 0.1);
             }}
             .stat-card.blue {{
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -1403,11 +1031,10 @@ def profile():
             .profile-info {{
                 padding: 40px;
                 background: #f7fafc;
-                border-top: 1px solid #e2e8f0;
             }}
             .info-grid {{
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                grid-template-columns: repeat(2, 1fr);
                 gap: 20px;
                 margin-bottom: 30px;
             }}
@@ -1421,43 +1048,17 @@ def profile():
                 color: #4a5568;
                 font-size: 14px;
                 margin-bottom: 8px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
             }}
             .info-item p {{
                 font-size: 18px;
                 font-weight: 600;
                 color: #2d3748;
             }}
-            .features {{
-                background: white;
-                padding: 30px;
-                border-radius: 16px;
-                margin-top: 30px;
-            }}
-            .features h2 {{
-                color: #2d3748;
-                margin-bottom: 20px;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }}
-            .feature-list {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 15px;
-            }}
-            .feature-item {{
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding: 12px;
-                background: #f7fafc;
-                border-radius: 8px;
-            }}
             @media (max-width: 768px) {{
                 .profile-stats {{
+                    flex-direction: column;
+                }}
+                .info-grid {{
                     grid-template-columns: 1fr;
                 }}
                 .navbar {{
@@ -1472,13 +1073,14 @@ def profile():
                 <span>☁️</span>
                 <span>CloudSecure</span>
             </a>
-            <div class="user-menu">
+            <div>
                 <a href="/dashboard" class="nav-btn primary">📁 Dashboard</a>
                 <a href="/logout" class="nav-btn secondary">🚪 Logout</a>
             </div>
         </nav>
        
         <div class="container">
+            {get_flash_html()}
             <div class="profile-card">
                 <div class="profile-header">
                     <div class="avatar-large">
@@ -1516,28 +1118,6 @@ def profile():
                         <div class="info-item">
                             <h3>🆔 User ID</h3>
                             <p>{user['id']}</p>
-                        </div>
-                    </div>
-                   
-                    <div class="features">
-                        <h2>✨ System Features</h2>
-                        <div class="feature-list">
-                            <div class="feature-item">
-                                <span>🔒</span>
-                                <span>End-to-end encryption</span>
-                            </div>
-                            <div class="feature-item">
-                                <span>☁️</span>
-                                <span>Cloud storage</span>
-                            </div>
-                            <div class="feature-item">
-                                <span>💾</span>
-                                <span>Data persistence</span>
-                            </div>
-                            <div class="feature-item">
-                                <span>⚡</span>
-                                <span>Fast downloads</span>
-                            </div>
                         </div>
                     </div>
                 </div>
