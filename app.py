@@ -522,9 +522,12 @@ def dashboard():
                 upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d %H:%M:%S').strftime('%d %b %Y, %H:%M')
             except:
                 try:
-                    upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d').strftime('%d %b %Y')
+                    upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d %H:%M:%S.%f').strftime('%d %b %Y, %H:%M')
                 except:
-                    upload_date = str(file["uploaded_at"])[:16]
+                    try:
+                        upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d').strftime('%d %b %Y')
+                    except:
+                        upload_date = str(file["uploaded_at"])[:16]
        
         filename = file.get("original_filename", "Неизвестный файл")
         file_id = file.get("file_id", "")
@@ -893,23 +896,35 @@ def profile():
             except:
                 join_date = str(user['created_at'])[:10]
    
-    first_upload = 'Загрузок еще не было'
+    last_upload = 'Загрузок еще не было'
     if user_files:
         upload_dates = []
         for f in user_files:
             if f.get('uploaded_at'):
                 try:
-                    date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S')
-                    upload_dates.append(date_obj)
-                except:
+                    # Пробуем разные форматы дат
                     try:
-                        date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d')
-                        upload_dates.append(date_obj)
+                        date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S')
                     except:
-                        pass
+                        try:
+                            date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S.%f')
+                        except:
+                            try:
+                                date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d')
+                            except:
+                                # Если ничего не работает, пропускаем этот файл
+                                continue
+                    upload_dates.append(date_obj)
+                except Exception as e:
+                    print(f"Ошибка парсинга даты: {e}")
+                    continue
        
         if upload_dates:
-            first_upload = min(upload_dates).strftime('%d %B %Y')
+            # Ищем ПОСЛЕДНЮЮ дату (максимальную)
+            last_date = max(upload_dates)
+            last_upload = last_date.strftime('%d %B %Y, %H:%M')
+        else:
+            last_upload = 'Даты загрузок недоступны'
    
     return f'''
     <!DOCTYPE html>
@@ -1111,8 +1126,8 @@ def profile():
                             <p>{join_date}</p>
                         </div>
                         <div class="info-item">
-                            <h3>📤 Первая загрузка</h3>
-                            <p>{first_upload}</p>
+                            <h3>📤 Последняя загрузка</h3>
+                            <p>{last_upload}</p>
                         </div>
                         <div class="info-item">
                             <h3>🆔 ID пользователя</h3>
