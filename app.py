@@ -4,7 +4,7 @@ from werkzeug.utils import secure_filename
 from cryptography.fernet import Fernet
 import os
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import io
 import cloudinary
 import cloudinary.uploader
@@ -38,11 +38,43 @@ app_data = {
     'last_updated': None
 }
 
+# 🔧 МОСКОВСКОЕ ВРЕМЯ (+3 часа от UTC)
+MOSCOW_TZ = timezone(timedelta(hours=3))
+
+def moscow_now():
+    """Получить текущее время по Москве"""
+    return datetime.now(MOSCOW_TZ)
+
+def to_moscow_time(dt_str):
+    """Конвертировать строку времени в московское время"""
+    if not dt_str:
+        return None
+    
+    # Пробуем разные форматы дат
+    formats = [
+        '%Y-%m-%d %H:%M:%S',
+        '%Y-%m-%d %H:%M:%S.%f',
+        '%Y-%m-%d'
+    ]
+    
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(dt_str, fmt)
+            # Если время не содержит информацию о часовом поясе, считаем его московским
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=MOSCOW_TZ)
+            return dt
+        except ValueError:
+            continue
+    
+    # Если ни один формат не подошел, возвращаем None
+    return None
+
 # 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С CLOUDINARY DB
 def save_to_cloudinary(data):
     """Сохраняем ВСЕ данные в Cloudinary"""
     try:
-        data['last_updated'] = str(datetime.now())
+        data['last_updated'] = str(moscow_now())
         json_data = json.dumps(data, indent=2, default=str)
        
         result = cloudinary.uploader.upload(
@@ -75,7 +107,7 @@ def load_from_cloudinary():
     return {
         'users': [],
         'files': [],
-        'last_updated': str(datetime.now())
+        'last_updated': str(moscow_now())
     }
 
 def init_db():
@@ -91,7 +123,7 @@ def init_db():
             'id': 1,
             'username': 'admin',
             'password': hashed_pw,
-            'created_at': str(datetime.now())
+            'created_at': str(moscow_now())
         }]
         save_to_cloudinary(app_data)
         print("✅ Тестовый пользователь: admin / admin123")
@@ -117,7 +149,7 @@ def add_user(username, password_hash):
         'id': new_id,
         'username': username,
         'password': password_hash,
-        'created_at': str(datetime.now())
+        'created_at': str(moscow_now())
     }
     app_data['users'].append(new_user)
     save_to_cloudinary(app_data)
@@ -518,16 +550,11 @@ def dashboard():
        
         upload_date = 'Неизвестно'
         if file.get("uploaded_at"):
-            try:
-                upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d %H:%M:%S').strftime('%d %b %Y, %H:%M')
-            except:
-                try:
-                    upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d %H:%M:%S.%f').strftime('%d %b %Y, %H:%M')
-                except:
-                    try:
-                        upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d').strftime('%d %b %Y')
-                    except:
-                        upload_date = str(file["uploaded_at"])[:16]
+            dt = to_moscow_time(str(file["uploaded_at"]))
+            if dt:
+                upload_date = dt.strftime('%d %b %Y, %H:%M') + ' (МСК)'
+            else:
+                upload_date = str(file["uploaded_at"])[:16] + ' (МСК)'
        
         filename = file.get("original_filename", "Неизвестный файл")
         file_id = file.get("file_id", "")
@@ -752,6 +779,7 @@ def dashboard():
                     <div>📦 Макс. размер: 16МБ</div>
                     <div>🔒 Сквозное шифрование</div>
                     <div>💾 Данные сохраняются после перезапуска</div>
+                    <div>🕐 Время по Москве (МСК)</div>
                 </div>
             </div>
            
@@ -784,7 +812,7 @@ def upload_file():
     try:
         user_id = session['user_id']
         filename = secure_filename(file.filename)
-        file_id = hashlib.md5(f"{user_id}_{filename}_{datetime.now()}".encode()).hexdigest()
+        file_id = hashlib.md5(f"{user_id}_{filename}_{moscow_now()}".encode()).hexdigest()
        
         file_data = file.read()
         file_size = len(file_data)
@@ -808,7 +836,7 @@ def upload_file():
             'file_size': file_size,
             'cloudinary_url': result['secure_url'],
             'cloudinary_public_id': result['public_id'],
-            'uploaded_at': str(datetime.now())
+            'uploaded_at': str(moscow_now())
         }
        
         add_file(file_record)
@@ -888,41 +916,25 @@ def profile():
    
     join_date = 'Неизвестно'
     if user.get('created_at'):
-        try:
-            join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d %H:%M:%S').strftime('%d %B %Y')
-        except:
-            try:
-                join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d').strftime('%d %B %Y')
-            except:
-                join_date = str(user['created_at'])[:10]
+        dt = to_moscow_time(str(user['created_at']))
+        if dt:
+            join_date = dt.strftime('%d %B %Y, %H:%M') + ' (МСК)'
+        else:
+            join_date = str(user['created_at'])[:10]
    
     last_upload = 'Загрузок еще не было'
     if user_files:
         upload_dates = []
         for f in user_files:
             if f.get('uploaded_at'):
-                try:
-                    # Пробуем разные форматы дат
-                    try:
-                        date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S')
-                    except:
-                        try:
-                            date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d %H:%M:%S.%f')
-                        except:
-                            try:
-                                date_obj = datetime.strptime(str(f['uploaded_at']), '%Y-%m-%d')
-                            except:
-                                # Если ничего не работает, пропускаем этот файл
-                                continue
-                    upload_dates.append(date_obj)
-                except Exception as e:
-                    print(f"Ошибка парсинга даты: {e}")
-                    continue
+                dt = to_moscow_time(str(f['uploaded_at']))
+                if dt:
+                    upload_dates.append(dt)
        
         if upload_dates:
             # Ищем ПОСЛЕДНЮЮ дату (максимальную)
             last_date = max(upload_dates)
-            last_upload = last_date.strftime('%d %B %Y, %H:%M')
+            last_upload = last_date.strftime('%d %B %Y, %H:%M') + ' (МСК)'
         else:
             last_upload = 'Даты загрузок недоступны'
    
@@ -1134,6 +1146,9 @@ def profile():
                             <p>{user['id']}</p>
                         </div>
                     </div>
+                    <div style="text-align: center; margin-top: 20px; color: #666; font-size: 14px;">
+                        🕐 Все временные метки указаны по московскому времени (МСК, UTC+3)
+                    </div>
                 </div>
             </div>
         </div>
@@ -1153,4 +1168,5 @@ if __name__ == '__main__':
     print(f"💾 ВСЕ данные сохраняются в Cloudinary")
     print(f"👥 Пользователей: {len(app_data['users'])}")
     print(f"📁 Файлов: {len(app_data['files'])}")
+    print(f"🕐 Используется московское время (UTC+3)")
     app.run(host='0.0.0.0', port=port, debug=False)
