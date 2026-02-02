@@ -197,10 +197,10 @@ def login():
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['username']
             session['username'] = user['username']
-            add_flash_message('Login successful!', 'success')
+            add_flash_message('Вход выполнен успешно!', 'success')
             return redirect('/dashboard')
         else:
-            add_flash_message('Invalid credentials', 'error')
+            add_flash_message('Неверные учетные данные', 'error')
    
     return f'''
     <!DOCTYPE html>
@@ -208,7 +208,7 @@ def login():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Login | CloudSecure</title>
+        <title>Вход | CloudSecure</title>
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -319,27 +319,27 @@ def login():
         <div class="login-box">
             <div class="login-header">
                 <h1>🔐 CloudSecure</h1>
-                <p>Secure Cloud Storage</p>
+                <p>Безопасное облачное хранилище</p>
             </div>
             <div class="login-content">
                 {get_flash_html()}
                 <div class="test-account">
-                    <strong>Test Account</strong>
+                    <strong>Тестовый аккаунт</strong>
                     <span>admin / admin123</span>
                 </div>
                 <form method="POST">
                     <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" class="form-control" placeholder="Enter username" required>
+                        <label for="username">Имя пользователя</label>
+                        <input type="text" id="username" name="username" class="form-control" placeholder="Введите имя пользователя" required>
                     </div>
                     <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" class="form-control" placeholder="Enter password" required>
+                        <label for="password">Пароль</label>
+                        <input type="password" id="password" name="password" class="form-control" placeholder="Введите пароль" required>
                     </div>
-                    <button type="submit" class="btn">Sign In</button>
+                    <button type="submit" class="btn">Войти</button>
                 </form>
                 <div class="register-link">
-                    Don't have an account? <a href="/register">Create one</a>
+                    Нет аккаунта? <a href="/register">Создать</a>
                 </div>
             </div>
         </div>
@@ -354,20 +354,20 @@ def register():
         password = request.form['password']
        
         if len(password) < 6:
-            add_flash_message('Password must be at least 6 characters', 'error')
+            add_flash_message('Пароль должен содержать минимум 6 символов', 'error')
             return redirect('/register')
        
         if get_user_by_username(username):
-            add_flash_message('Username already exists', 'error')
+            add_flash_message('Имя пользователя уже существует', 'error')
             return redirect('/register')
        
         try:
             hashed_pw = generate_password_hash(password)
             add_user(username, hashed_pw)
-            add_flash_message('Registration successful! You can now login', 'success')
+            add_flash_message('Регистрация успешна! Теперь вы можете войти', 'success')
             return redirect('/login')
         except Exception as e:
-            add_flash_message(f'Registration error: {str(e)}', 'error')
+            add_flash_message(f'Ошибка регистрации: {str(e)}', 'error')
    
     return f'''
     <!DOCTYPE html>
@@ -375,7 +375,7 @@ def register():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Register | CloudSecure</title>
+        <title>Регистрация | CloudSecure</title>
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -473,25 +473,25 @@ def register():
     <body>
         <div class="register-box">
             <div class="register-header">
-                <h1>📝 Create Account</h1>
-                <p>Join CloudSecure today</p>
+                <h1>📝 Создание аккаунта</h1>
+                <p>Присоединяйтесь к CloudSecure сегодня</p>
             </div>
             <div class="register-content">
                 {get_flash_html()}
                 <form method="POST">
                     <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" class="form-control" placeholder="Choose username" required>
+                        <label for="username">Имя пользователя</label>
+                        <input type="text" id="username" name="username" class="form-control" placeholder="Выберите имя пользователя" required>
                     </div>
                     <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" class="form-control" placeholder="At least 6 characters" required>
-                        <div class="password-hint">Minimum 6 characters required</div>
+                        <label for="password">Пароль</label>
+                        <input type="password" id="password" name="password" class="form-control" placeholder="Минимум 6 символов" required>
+                        <div class="password-hint">Требуется минимум 6 символов</div>
                     </div>
-                    <button type="submit" class="btn">Create Account</button>
+                    <button type="submit" class="btn">Создать аккаунт</button>
                 </form>
                 <div class="login-link">
-                    Already have an account? <a href="/login">Sign in</a>
+                    Уже есть аккаунт? <a href="/login">Войти</a>
                 </div>
             </div>
         </div>
@@ -509,7 +509,6 @@ def dashboard():
    
     files_html = ""
     for file in files_list:
-        # Безопасное получение данных
         size_kb = 0
         if file.get("file_size"):
             try:
@@ -517,7 +516,7 @@ def dashboard():
             except:
                 size_kb = 0
        
-        upload_date = 'Unknown'
+        upload_date = 'Неизвестно'
         if file.get("uploaded_at"):
             try:
                 upload_date = datetime.strptime(str(file["uploaded_at"]), '%Y-%m-%d %H:%M:%S').strftime('%d %b %Y, %H:%M')
@@ -527,7 +526,7 @@ def dashboard():
                 except:
                     upload_date = str(file["uploaded_at"])[:16]
        
-        filename = file.get("original_filename", "Unknown file")
+        filename = file.get("original_filename", "Неизвестный файл")
         file_id = file.get("file_id", "")
        
         files_html += f'''
@@ -539,17 +538,17 @@ def dashboard():
                 <div>
                     <div style="font-weight: 600; color: #333; margin-bottom: 5px;">{filename}</div>
                     <div style="font-size: 13px; color: #666;">
-                        <span style="margin-right: 15px;">📦 {size_kb} KB</span>
+                        <span style="margin-right: 15px;">📦 {size_kb} КБ</span>
                         <span>📅 {upload_date}</span>
                     </div>
                 </div>
             </div>
             <div style="display: flex; gap: 10px;">
                 <a href="/download/{file_id}" style="background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
-                    ⬇️ Download
+                    ⬇️ Скачать
                 </a>
-                <a href="/delete/{file_id}" onclick="return confirm('Delete {filename}?')" style="background: #f56565; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
-                    🗑️ Delete
+                <a href="/delete/{file_id}" onclick="return confirm('Удалить {filename}?')" style="background: #f56565; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 5px;">
+                    🗑️ Удалить
                 </a>
             </div>
         </div>
@@ -559,8 +558,8 @@ def dashboard():
         files_html = '''
         <div style="text-align: center; padding: 60px 20px; color: #666;">
             <div style="font-size: 60px; margin-bottom: 20px;">📁</div>
-            <h3 style="font-size: 24px; font-weight: 500; margin-bottom: 10px;">No files yet</h3>
-            <p>Upload your first file to get started</p>
+            <h3 style="font-size: 24px; font-weight: 500; margin-bottom: 10px;">Файлов пока нет</h3>
+            <p>Загрузите ваш первый файл, чтобы начать</p>
         </div>
         '''
    
@@ -570,7 +569,7 @@ def dashboard():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Dashboard | CloudSecure</title>
+        <title>Панель управления | CloudSecure</title>
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -728,11 +727,11 @@ def dashboard():
                     <div class="avatar">
                         {session["username"][0].upper()}
                     </div>
-                    <span>Hello, {session["username"]}</span>
+                    <span>Здравствуйте, {session["username"]}</span>
                 </div>
                 <div style="display: flex; gap: 10px;">
-                    <a href="/profile" class="nav-btn primary">👤 Profile</a>
-                    <a href="/logout" class="nav-btn secondary">🚪 Logout</a>
+                    <a href="/profile" class="nav-btn primary">👤 Профиль</a>
+                    <a href="/logout" class="nav-btn secondary">🚪 Выйти</a>
                 </div>
             </div>
         </nav>
@@ -741,22 +740,22 @@ def dashboard():
             {get_flash_html()}
            
             <div class="upload-section">
-                <h2 class="section-title">📤 Upload File</h2>
+                <h2 class="section-title">📤 Загрузить файл</h2>
                 <form method="POST" action="/upload" enctype="multipart/form-data" class="upload-form">
                     <input type="file" name="file" required class="file-input">
-                    <button type="submit" class="btn-upload">📎 Upload File</button>
+                    <button type="submit" class="btn-upload">📎 Загрузить файл</button>
                 </form>
                 <div class="upload-info">
-                    <div>📦 Max size: 16MB</div>
-                    <div>🔒 End-to-end encrypted</div>
-                    <div>💾 Data persists after restart</div>
+                    <div>📦 Макс. размер: 16МБ</div>
+                    <div>🔒 Сквозное шифрование</div>
+                    <div>💾 Данные сохраняются после перезапуска</div>
                 </div>
             </div>
            
             <div class="files-section">
                 <div class="section-header">
-                    <h2 class="section-title">📁 Your Files</h2>
-                    <div class="files-count">{len(files_list)} files</div>
+                    <h2 class="section-title">📁 Ваши файлы</h2>
+                    <div class="files-count">{len(files_list)} файлов</div>
                 </div>
                 {files_html}
             </div>
@@ -771,12 +770,12 @@ def upload_file():
         return redirect('/login')
    
     if 'file' not in request.files:
-        add_flash_message('No file selected', 'error')
+        add_flash_message('Файл не выбран', 'error')
         return redirect('/dashboard')
    
     file = request.files['file']
     if file.filename == '':
-        add_flash_message('No file selected', 'error')
+        add_flash_message('Файл не выбран', 'error')
         return redirect('/dashboard')
    
     try:
@@ -788,7 +787,7 @@ def upload_file():
         file_size = len(file_data)
        
         if file_size > 16 * 1024 * 1024:
-            add_flash_message('File too large (max 16MB)', 'error')
+            add_flash_message('Файл слишком большой (макс. 16МБ)', 'error')
             return redirect('/dashboard')
        
         encrypted_data = encrypt_file(file_data)
@@ -810,10 +809,10 @@ def upload_file():
         }
        
         add_file(file_record)
-        add_flash_message(f'File "{filename}" uploaded successfully!', 'success')
+        add_flash_message(f'Файл "{filename}" успешно загружен!', 'success')
        
     except Exception as e:
-        add_flash_message(f'Upload error: {str(e)}', 'error')
+        add_flash_message(f'Ошибка загрузки: {str(e)}', 'error')
    
     return redirect('/dashboard')
 
@@ -836,11 +835,11 @@ def download_file(file_id):
                     download_name=file['original_filename']
                 )
             else:
-                add_flash_message('File not found on cloud storage', 'error')
+                add_flash_message('Файл не найден в облачном хранилище', 'error')
         except Exception as e:
-            add_flash_message(f'Download error: {str(e)}', 'error')
+            add_flash_message(f'Ошибка скачивания: {str(e)}', 'error')
     else:
-        add_flash_message('File not found', 'error')
+        add_flash_message('Файл не найден', 'error')
    
     return redirect('/dashboard')
 
@@ -858,11 +857,11 @@ def delete_file(file_id):
                 cloudinary.uploader.destroy(file['cloudinary_public_id'], resource_type="raw")
            
             delete_file_record(file_id, user_id)
-            add_flash_message(f'File "{file["original_filename"]}" deleted!', 'success')
+            add_flash_message(f'Файл "{file["original_filename"]}" удален!', 'success')
         except Exception as e:
-            add_flash_message(f'Delete error: {str(e)}', 'error')
+            add_flash_message(f'Ошибка удаления: {str(e)}', 'error')
     else:
-        add_flash_message('File not found', 'error')
+        add_flash_message('Файл не найден', 'error')
    
     return redirect('/dashboard')
 
@@ -875,7 +874,7 @@ def profile():
     user = get_user_by_username(user_id)
    
     if not user:
-        add_flash_message('User not found', 'error')
+        add_flash_message('Пользователь не найден', 'error')
         return redirect('/logout')
    
     user_files = get_user_files(user_id)
@@ -884,17 +883,17 @@ def profile():
    
     total_size_mb = round(total_size / (1024 * 1024), 2) if total_size else 0
    
-    join_date = 'Unknown'
+    join_date = 'Неизвестно'
     if user.get('created_at'):
         try:
-            join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d %H:%M:%S').strftime('%B %d, %Y')
+            join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d %H:%M:%S').strftime('%d %B %Y')
         except:
             try:
-                join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d').strftime('%B %d, %Y')
+                join_date = datetime.strptime(str(user['created_at']), '%Y-%m-%d').strftime('%d %B %Y')
             except:
                 join_date = str(user['created_at'])[:10]
    
-    first_upload = 'No uploads yet'
+    first_upload = 'Загрузок еще не было'
     if user_files:
         upload_dates = []
         for f in user_files:
@@ -910,7 +909,7 @@ def profile():
                         pass
        
         if upload_dates:
-            first_upload = min(upload_dates).strftime('%B %d, %Y')
+            first_upload = min(upload_dates).strftime('%d %B %Y')
    
     return f'''
     <!DOCTYPE html>
@@ -918,7 +917,7 @@ def profile():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Profile | CloudSecure</title>
+        <title>Профиль | CloudSecure</title>
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1074,8 +1073,8 @@ def profile():
                 <span>CloudSecure</span>
             </a>
             <div>
-                <a href="/dashboard" class="nav-btn primary">📁 Dashboard</a>
-                <a href="/logout" class="nav-btn secondary">🚪 Logout</a>
+                <a href="/dashboard" class="nav-btn primary">📁 Панель управления</a>
+                <a href="/logout" class="nav-btn secondary">🚪 Выйти</a>
             </div>
         </nav>
        
@@ -1087,36 +1086,36 @@ def profile():
                         {session["username"][0].upper()}
                     </div>
                     <h1>{session["username"]}</h1>
-                    <p>Cloud Storage User</p>
+                    <p>Пользователь облачного хранилища</p>
                 </div>
                
                 <div class="profile-stats">
                     <div class="stat-card blue">
                         <div class="stat-value">{total_files}</div>
-                        <div class="stat-label">Total Files</div>
+                        <div class="stat-label">Всего файлов</div>
                     </div>
                     <div class="stat-card green">
                         <div class="stat-value">{total_size_mb}</div>
-                        <div class="stat-label">Storage Used (MB)</div>
+                        <div class="stat-label">Использовано (МБ)</div>
                     </div>
                 </div>
                
                 <div class="profile-info">
                     <div class="info-grid">
                         <div class="info-item">
-                            <h3>👤 Username</h3>
+                            <h3>👤 Имя пользователя</h3>
                             <p>{user['username']}</p>
                         </div>
                         <div class="info-item">
-                            <h3>📅 Member Since</h3>
+                            <h3>📅 Дата регистрации</h3>
                             <p>{join_date}</p>
                         </div>
                         <div class="info-item">
-                            <h3>📤 First Upload</h3>
+                            <h3>📤 Первая загрузка</h3>
                             <p>{first_upload}</p>
                         </div>
                         <div class="info-item">
-                            <h3>🆔 User ID</h3>
+                            <h3>🆔 ID пользователя</h3>
                             <p>{user['id']}</p>
                         </div>
                     </div>
@@ -1130,7 +1129,7 @@ def profile():
 @app.route('/logout')
 def logout():
     session.clear()
-    add_flash_message('Logged out successfully', 'info')
+    add_flash_message('Выход выполнен успешно', 'info')
     return redirect('/login')
 
 if __name__ == '__main__':
@@ -1140,4 +1139,3 @@ if __name__ == '__main__':
     print(f"👥 Пользователей: {len(app_data['users'])}")
     print(f"📁 Файлов: {len(app_data['files'])}")
     app.run(host='0.0.0.0', port=port, debug=False)
-
