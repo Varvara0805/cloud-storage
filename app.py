@@ -44,22 +44,20 @@ def to_moscow_time(dt_str):
     if not dt_str:
         return None
     
-    formats = [
-        '%Y-%m-%d %H:%M:%S',
-        '%Y-%m-%d %H:%M:%S.%f',
-        '%Y-%m-%d'
-    ]
-    
-    for fmt in formats:
+    try:
+        if isinstance(dt_str, str):
+            dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return dt.astimezone(MOSCOW_TZ)
+    except:
         try:
-            dt = datetime.strptime(dt_str, fmt)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=MOSCOW_TZ)
-            return dt
-        except ValueError:
-            continue
-    
-    return None
+            dt = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S.%f')
+            return dt.replace(tzinfo=MOSCOW_TZ)
+        except:
+            try:
+                dt = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+                return dt.replace(tzinfo=MOSCOW_TZ)
+            except:
+                return None
 
 def save_to_cloudinary(data):
     try:
@@ -539,7 +537,7 @@ def dashboard():
             if dt:
                 upload_date = dt.strftime('%d %b %Y, %H:%M') + ' (МСК)'
             else:
-                upload_date = str(file["uploaded_at"])[:16] + ' (МСК)'
+                upload_date = str(file["uploaded_at"])[:16]
        
         filename = file.get("original_filename", "Неизвестный файл")
         file_id = file.get("file_id", "")
@@ -915,12 +913,13 @@ def profile():
                 dt = to_moscow_time(str(f['uploaded_at']))
                 if dt:
                     upload_dates.append(dt)
+                else:
+                    print(f"Ошибка конвертации даты: {f.get('uploaded_at')}")
        
         if upload_dates:
-            last_date = max(upload_dates)
+            upload_dates.sort(reverse=True)
+            last_date = upload_dates[0]
             last_upload = last_date.strftime('%d %B %Y, %H:%M') + ' (МСК)'
-        else:
-            last_upload = 'Даты загрузок недоступны'
    
     return f'''
     <!DOCTYPE html>
