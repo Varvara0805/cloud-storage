@@ -16,7 +16,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-12345')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# 🔧 НАСТРОЙКИ CLOUDINARY
 cloudinary.config(
     cloud_name=os.environ.get('CLOUDINARY_CLOUD_NAME'),
     api_key=os.environ.get('CLOUDINARY_API_KEY'),
@@ -24,33 +23,27 @@ cloudinary.config(
     secure=True
 )
 
-# 🔧 КЛЮЧ ШИФРОВАНИЯ
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', Fernet.generate_key().decode()).encode()
 cipher_suite = Fernet(ENCRYPTION_KEY)
 
 print("🚀 ЗАПУСК СЕРВЕРА")
 print("💾 ВСЕ данные хранятся в Cloudinary")
 
-# 🔧 ГЛОБАЛЬНАЯ ПЕРЕМЕННАЯ ДЛЯ ДАННЫХ
 app_data = {
     'users': [],
     'files': [],
     'last_updated': None
 }
 
-# 🔧 МОСКОВСКОЕ ВРЕМЯ (+3 часа от UTC)
 MOSCOW_TZ = timezone(timedelta(hours=3))
 
 def moscow_now():
-    """Получить текущее время по Москве"""
     return datetime.now(MOSCOW_TZ)
 
 def to_moscow_time(dt_str):
-    """Конвертировать строку времени в московское время"""
     if not dt_str:
         return None
     
-    # Пробуем разные форматы дат
     formats = [
         '%Y-%m-%d %H:%M:%S',
         '%Y-%m-%d %H:%M:%S.%f',
@@ -60,19 +53,15 @@ def to_moscow_time(dt_str):
     for fmt in formats:
         try:
             dt = datetime.strptime(dt_str, fmt)
-            # Если время не содержит информацию о часовом поясе, считаем его московским
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=MOSCOW_TZ)
             return dt
         except ValueError:
             continue
     
-    # Если ни один формат не подошел, возвращаем None
     return None
 
-# 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С CLOUDINARY DB
 def save_to_cloudinary(data):
-    """Сохраняем ВСЕ данные в Cloudinary"""
     try:
         data['last_updated'] = str(moscow_now())
         json_data = json.dumps(data, indent=2, default=str)
@@ -89,7 +78,6 @@ def save_to_cloudinary(data):
         return False
 
 def load_from_cloudinary():
-    """Загружаем ВСЕ данные из Cloudinary"""
     try:
         result = cloudinary.api.resource(
             "storage/db/database",
@@ -111,7 +99,6 @@ def load_from_cloudinary():
     }
 
 def init_db():
-    """Инициализация базы данных в Cloudinary"""
     global app_data
    
     print("🔄 Загружаем базу данных из Cloudinary...")
@@ -133,7 +120,6 @@ def init_db():
 
 init_db()
 
-# 🔧 ФУНКЦИИ ДЛЯ РАБОТЫ С ДАННЫМИ
 def get_user_by_username(username):
     for user in app_data['users']:
         if user['username'] == username:
@@ -211,7 +197,6 @@ def get_flash_html():
     messages = []
     return html
 
-# 🎯 МАРШРУТЫ
 @app.route('/')
 def index():
     if 'user_id' in session:
@@ -932,7 +917,6 @@ def profile():
                     upload_dates.append(dt)
        
         if upload_dates:
-            # Ищем ПОСЛЕДНЮЮ дату (максимальную)
             last_date = max(upload_dates)
             last_upload = last_date.strftime('%d %B %Y, %H:%M') + ' (МСК)'
         else:
